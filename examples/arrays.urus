@@ -1,0 +1,22 @@
+fn sum(nums: [int]): int {
+    let mut total: int = 0;
+    for i in 0..len(nums) {
+        total += nums[i];
+    }
+    return total;
+}
+
+fn main(): void {
+    let nums: [int] = [10, 20, 30, 40, 50];
+    print(f"Sum: {sum(nums)}");
+    print(f"Length: {len(nums)}");
+    print(f"First: {nums[0]}");
+    print(f"Last: {nums[4]}");
+
+    // Dynamic array
+    let mut items: [int] = [];
+    for i in 1..=5 {
+        push(items, i * i);
+    }
+    print(f"Squares sum: {sum(items)}");
+}

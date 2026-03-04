@@ -1,0 +1,11 @@
+fn main(): void {
+    let nums: [int] = [10, 20, 30];
+    for n in nums {
+        print(n);
+    }
+
+    let names: [str] = ["Alice", "Bob"];
+    for name in names {
+        print(name);
+    }
+}

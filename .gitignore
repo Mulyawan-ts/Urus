@@ -1,0 +1,27 @@
+# Build artifacts
+*.exe
+*.o
+*.obj
+*.out
+
+# Generated C output
+*_tmp.c
+
+# Compiler temp files
+compiler/build_err.txt
+compiler/build_output.txt
+compiler/sema_err.txt
+compiler/err.log
+
+# IDE / Editor
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Claude
+.claude/

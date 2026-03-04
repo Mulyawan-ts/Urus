@@ -1,0 +1,38 @@
+fn divide(a: int, b: int): Result<int, str> {
+    if b == 0 {
+        return Err("division by zero");
+    }
+    return Ok(a / b);
+}
+
+fn safe_sqrt(x: float): Result<float, str> {
+    if x < 0.0 {
+        return Err("cannot take square root of negative number");
+    }
+    return Ok(sqrt(x));
+}
+
+fn main(): void {
+    // Successful division
+    let r1: Result<int, str> = divide(10, 2);
+    if is_ok(r1) {
+        print(f"10 / 2 = {unwrap(r1)}");
+    }
+
+    // Division by zero
+    let r2: Result<int, str> = divide(10, 0);
+    if is_err(r2) {
+        print(f"Error: {unwrap_err(r2)}");
+    }
+
+    // Safe sqrt
+    let r3: Result<float, str> = safe_sqrt(16.0);
+    if is_ok(r3) {
+        print("sqrt(16) succeeded");
+    }
+
+    let r4: Result<float, str> = safe_sqrt(-1.0);
+    if is_err(r4) {
+        print(f"Error: {unwrap_err(r4)}");
+    }
+}

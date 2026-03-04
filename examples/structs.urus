@@ -1,0 +1,29 @@
+struct Point {
+    x: float;
+    y: float;
+}
+
+struct Circle {
+    center: Point;
+    radius: float;
+}
+
+fn distance(a: Point, b: Point): float {
+    let dx: float = a.x - b.x;
+    let dy: float = a.y - b.y;
+    return sqrt(dx * dx + dy * dy);
+}
+
+fn area(c: Circle): float {
+    return 3.14159 * c.radius * c.radius;
+}
+
+fn main(): void {
+    let p1: Point = Point { x: 0.0, y: 0.0 };
+    let p2: Point = Point { x: 3.0, y: 4.0 };
+
+    print(f"Distance: {distance(p1, p2)}");
+
+    let c: Circle = Circle { center: p1, radius: 5.0 };
+    print(f"Area: {area(c)}");
+}

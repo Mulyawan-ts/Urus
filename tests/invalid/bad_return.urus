@@ -1,0 +1,7 @@
+fn add(a: int, b: int): int {
+    return "not a number";
+}
+
+fn main(): void {
+    print(add(1, 2));
+}

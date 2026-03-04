@@ -1,0 +1,13 @@
+fn main(): void {
+    // For loop
+    for i in 0..3 {
+        print(f"{i}");
+    }
+
+    // While loop
+    let mut n: int = 3;
+    while n > 0 {
+        print(f"n={n}");
+        n = n - 1;
+    }
+}

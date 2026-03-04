@@ -1,0 +1,37 @@
+enum Color {
+    Red;
+    Green;
+    Blue;
+    Custom(r: int, g: int, b: int);
+}
+
+enum Shape {
+    Circle(r: float);
+    Rect(w: float, h: float);
+    Point;
+}
+
+fn describe_shape(s: Shape): str {
+    match s {
+        Shape.Circle(r) => {
+            return f"Circle with radius {r}";
+        }
+        Shape.Rect(w, h) => {
+            return f"Rectangle {w} x {h}";
+        }
+        Shape.Point => {
+            return "A point";
+        }
+    }
+    return "Unknown";
+}
+
+fn main(): void {
+    let s1: Shape = Shape.Circle(5.0);
+    let s2: Shape = Shape.Rect(3.0, 4.0);
+    let s3: Shape = Shape.Point;
+
+    print(describe_shape(s1));
+    print(describe_shape(s2));
+    print(describe_shape(s3));
+}

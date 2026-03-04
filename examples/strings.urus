@@ -1,0 +1,26 @@
+fn main(): void {
+    let s: str = "Hello, URUS!";
+
+    // String operations
+    print(f"Length: {str_len(s)}");
+    print(f"Upper: {str_upper(s)}");
+    print(f"Lower: {str_lower(s)}");
+    print(f"Slice [0..5]: {str_slice(s, 0, 5)}");
+    print(f"Contains 'URUS': {str_contains(s, \"URUS\")}");
+    print(f"Replace: {str_replace(s, \"URUS\", \"World\")}");
+
+    // String interpolation
+    let name: str = "World";
+    let count: int = 42;
+    print(f"Hello {name}! The answer is {count}.");
+
+    // Trim
+    let padded: str = "  spaced  ";
+    print(f"Trimmed: '{str_trim(padded)}'");
+
+    // String conversion
+    let num: int = 123;
+    let text: str = to_str(num);
+    print(f"Number as string: {text}");
+    print(f"Back to int: {to_int(text)}");
+}

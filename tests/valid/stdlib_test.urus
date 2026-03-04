@@ -1,0 +1,38 @@
+fn main(): void {
+    // String operations
+    let s: str = "Hello, World!";
+    print("=== String Ops ===");
+    print(str_len(s));
+    print(str_slice(s, 0, 5));
+    print(str_contains(s, "World"));
+    print(str_upper(s));
+    print(str_lower(s));
+    print(str_trim("  spaced  "));
+    print(str_replace(s, "World", "URUS"));
+    print(str_starts_with(s, "Hello"));
+    print(str_ends_with(s, "!"));
+    print(str_find(s, "World"));
+    print(char_at(s, 0));
+
+    // Math
+    print("=== Math ===");
+    print(sqrt(16.0));
+    print(abs(-42));
+    print(max(10, 20));
+    print(min(10, 20));
+    print(pow(2.0, 10.0));
+
+    // File I/O
+    print("=== File I/O ===");
+    write_file("_test_out.txt", "hello from URUS!");
+    let content: str = read_file("_test_out.txt");
+    print(content);
+    append_file("_test_out.txt", " appended.");
+    print(read_file("_test_out.txt"));
+
+    // Assert
+    print("=== Assert ===");
+    assert(1 == 1, "basic math");
+    assert(str_len("abc") == 3, "str_len works");
+    print("All assertions passed!");
+}

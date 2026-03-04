@@ -1,0 +1,18 @@
+struct Circle {
+    radius: float;
+}
+
+fn area(c: Circle): float {
+    return 3.14159 * c.radius * c.radius;
+}
+
+fn main(): void {
+    let c: Circle = Circle { radius: 5.0 };
+    print("Area: " + to_str(area(c)));
+
+    let mut sum: int = 0;
+    for i in 1..=100 {
+        sum += i;
+    }
+    print("Sum 1-100: " + to_str(sum));
+}

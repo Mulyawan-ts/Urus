@@ -1,0 +1,12 @@
+fn main(): void {
+    let nums: [int] = [1, 2, 3];
+    print(f"{len(nums)}");
+    print(f"{nums[0]}");
+    print(f"{nums[2]}");
+
+    let mut items: [int] = [];
+    push(items, 10);
+    push(items, 20);
+    print(f"{len(items)}");
+    print(f"{items[1]}");
+}

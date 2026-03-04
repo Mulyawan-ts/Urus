@@ -1,0 +1,7 @@
+import "math_utils.urus";
+
+fn main(): void {
+    print(f"square(5) = {square(5)}");
+    print(f"cube(3) = {cube(3)}");
+    print(f"factorial(6) = {factorial(6)}");
+}

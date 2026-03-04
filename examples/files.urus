@@ -1,0 +1,14 @@
+fn main(): void {
+    // Write a file
+    write_file("_test_output.txt", "Hello from URUS!\n");
+    print("File written.");
+
+    // Read it back
+    let content: str = read_file("_test_output.txt");
+    print(f"Read: {str_trim(content)}");
+
+    // Append
+    append_file("_test_output.txt", "Second line.\n");
+    let content2: str = read_file("_test_output.txt");
+    print(f"After append: {str_trim(content2)}");
+}

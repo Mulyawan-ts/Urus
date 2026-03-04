@@ -1,0 +1,16 @@
+fn main(): void {
+    let x: int = 10;
+    if x > 5 {
+        print("greater");
+    } else {
+        print("smaller");
+    }
+
+    if x == 10 {
+        print("ten");
+    } else if x == 20 {
+        print("twenty");
+    } else {
+        print("other");
+    }
+}

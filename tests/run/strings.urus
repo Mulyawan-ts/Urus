@@ -1,0 +1,7 @@
+fn main(): void {
+    let s: str = "Hello";
+    print(f"{str_len(s)}");
+    print(str_upper(s));
+    print(str_lower(s));
+    print(f"'{str_trim("  hi  ")}'");
+}

@@ -1,0 +1,7 @@
+fn main(): void {
+    print(f"{2 + 3}");
+    print(f"{10 - 4}");
+    print(f"{3 * 7}");
+    print(f"{20 / 4}");
+    print(f"{17 % 5}");
+}
