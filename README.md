@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="assets/logo.jpg" alt="URUS Logo" width="150" />
   <h1 align="center">URUS Programming Language</h1>
   <p align="center">
     <strong>A statically-typed, compiled programming language that transpiles to portable C11.</strong>
