@@ -584,6 +584,22 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ---
 
+## License
+
+Apache License 2.0 — see [LICENSE](./LICENSE)
+
+---
+
+<p align="center">
+  <img src="assets/urus-quote.jpg" alt="Urus Foundation" width="400" />
+  <br>
+  <em>"Urus nggak harus besar, yang penting konsisten."</em>
+  <br>
+  <em>"Urus doesn't have to be big, what matters is consistency."</em>
+</p>
+
+---
+
 ## Contributors
 
 Thanks to everyone who has contributed to URUS!
@@ -593,8 +609,8 @@ Thanks to everyone who has contributed to URUS!
 <table>
   <tr>
     <td align="center"><a href="https://github.com/RasyaAndrean"><img src="https://github.com/RasyaAndrean.png" width="80" /><br /><sub><b>Rasya Andrean</b></sub></a><br /><sub>Founder & Lead</sub></td>
+    <td align="center"><a href="https://github.com/John-fried"><img src="https://github.com/John-fried.png" width="80" /><br /><sub><b>John-fried</b></sub></a><br /><sub>Co-Lead</sub></td>
     <td align="center"><a href="https://github.com/Mulyawan-ts"><img src="https://github.com/Mulyawan-ts.png" width="80" /><br /><sub><b>Mulyawan-ts</b></sub></a><br /><sub>Developer</sub></td>
-    <td align="center"><a href="https://github.com/John-fried"><img src="https://github.com/John-fried.png" width="80" /><br /><sub><b>John-fried</b></sub></a><br /><sub>Developer</sub></td>
   </tr>
 </table>
 
@@ -612,15 +628,7 @@ Thanks to everyone who has contributed to URUS!
 
 ---
 
-## License
-
-Apache License 2.0 — see [LICENSE](./LICENSE)
-
----
-
 <p align="center">
-  <img src="assets/urus-quote.jpg" alt="Urus Foundation" width="400" />
-  <br><br>
   <strong>Built with care. Designed for clarity.</strong>
   <br><br>
   <a href="./documentation/">Documentation</a> &nbsp;&bull;&nbsp;
