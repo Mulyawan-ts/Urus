@@ -11,6 +11,7 @@ AstNode *ast_new(NodeKind kind, Token tok) {
     AstNode *n = calloc(1, sizeof(AstNode));
     n->kind = kind;
     n->tok = tok;
+    n->ref_count = 1;
     return n;
 }
 
@@ -383,7 +384,7 @@ void ast_type_free(AstType *type) {
 }
 
 void ast_free(AstNode *node) {
-    if (!node) return;
+    if (!node || --node->ref_count > 0) return;
     ast_type_free(node->resolved_type);
     switch (node->kind) {
     case NODE_PROGRAM:

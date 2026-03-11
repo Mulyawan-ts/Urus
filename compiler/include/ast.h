@@ -78,6 +78,7 @@ typedef enum {
 typedef struct {
     char *name;
     AstType *type;
+    AstNode *default_value;
 } Param;
 
 // ---- Struct field init ----
@@ -109,6 +110,7 @@ typedef struct {
 struct AstNode {
     NodeKind kind;
     Token tok;
+    int ref_count; // prevent unexpected free
 
     union {
         // NODE_PROGRAM

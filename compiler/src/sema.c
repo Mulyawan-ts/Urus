@@ -284,7 +284,14 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
             return set_type(node, ast_type_simple(TYPE_VOID));
         }
 
-        if (sym->param_count >= 0 && node->as.call.arg_count != sym->param_count) {
+        int min_args = 0; //minimal arguments (argument with default value will not counted)
+        for (int i = 0; i < sym->param_count; i++) {
+            if (sym->params[i].default_value == NULL) {
+                min_args++;
+            }
+        }
+
+        if (node->as.call.arg_count < min_args || node->as.call.arg_count > sym->param_count) {
             sema_error(ctx, &node->tok, "'%s' expects %d arguments, got %d",
                        fn_name, sym->param_count, node->as.call.arg_count);
         }
@@ -303,6 +310,28 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
                 }
             }
         }
+
+		// Inject default parameter types to args
+		if (node->as.call.arg_count < sym->param_count) {
+            AstNode **new_args = malloc(sizeof(AstNode *) * (size_t)sym->param_count);
+
+            for (int i = 0; i < node->as.call.arg_count; i++) {
+                new_args[i] = node->as.call.args[i];
+            }
+
+            for (int i = node->as.call.arg_count; i < sym->param_count; i++) {
+                if (sym->params[i].default_value != NULL) {
+                    new_args[i] = sym->params[i].default_value;
+                    new_args[i]->ref_count++;
+                } else {
+                    sema_error(ctx, &node->tok, "Missing argument for parameter '%s'", sym->params[i].name);
+                }
+            }
+
+            free(node->as.call.args);
+            node->as.call.args = new_args;
+            node->as.call.arg_count = sym->param_count;
+		}
 
         // Special: unwrap returns the ok_type of the Result argument
         AstType *final_return = sym->return_type;
@@ -867,9 +896,18 @@ bool sema_analyze(AstNode *program, const char *filename) {
             ctx.current_fn_return = d->as.fn_decl.return_type;
 
             for (int j = 0; j < d->as.fn_decl.param_count; j++) {
+                Param *p_decl = &d->as.fn_decl.params[j];
                 Symbol *p = scope_add(fn_scope, d->as.fn_decl.params[j].name, d->tok);
                 p->type = d->as.fn_decl.params[j].type;
                 p->is_mut = false;
+
+                if (p_decl->default_value != NULL) {
+                    AstType *def_type = check_expr(&ctx, p_decl->default_value);
+                    if (!ast_types_equal(def_type, p_decl->type)) {
+                        sema_error(&ctx, &d->tok, "default value type mismatch for parameter '%s': expected '%s' but got '%s'",
+                                p_decl->name, ast_type_str(p_decl->type), ast_type_str(def_type));
+                    }
+                }
             }
 
             AstNode *body = d->as.fn_decl.body;
