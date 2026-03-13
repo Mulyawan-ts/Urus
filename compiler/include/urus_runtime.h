@@ -12,6 +12,55 @@
 #include <ctype.h>
 
 // ============================================================
+// RAII (runtime level)
+// ============================================================
+
+typedef void (*urus_dtor_fn)(void*);
+typedef struct {
+    void *ptr;
+    urus_dtor_fn dtor;
+} urus_temp_obj;
+
+#define URUS_POOL_MAX 8192
+static urus_temp_obj _urus_pool[URUS_POOL_MAX];
+static int _urus_pool_count;
+
+static void urus_retain(void *ptr) {
+    if (ptr) {
+        int *rc = (int *)ptr;
+        (*rc)++;
+    }
+}
+
+static void *urus_autorelease(void *ptr, urus_dtor_fn dtor) {
+    if (dtor && _urus_pool_count < URUS_POOL_MAX) {
+            _urus_pool[_urus_pool_count].ptr = ptr;
+            _urus_pool[_urus_pool_count].dtor = dtor;
+            _urus_pool_count++;
+    }
+    return ptr;
+}
+
+static inline void urus_flush_pool(void) {
+    for (int i = 0; i<_urus_pool_count; i++) {
+        if (_urus_pool[i].dtor)
+            _urus_pool[i].dtor(_urus_pool[i].ptr);
+    }
+    _urus_pool_count = 0;
+}
+
+static void urus_release(void *ptr, urus_dtor_fn dtor) {
+    if (ptr) {
+        int *rc = (int *)ptr;
+        (*rc)--;
+        if (*rc <= 0) {
+            if (dtor) dtor(ptr);
+            free(ptr);
+        }
+    }
+}
+
+// ============================================================
 // String (ref-counted)
 // ============================================================
 
@@ -21,21 +70,21 @@ typedef struct {
     char data[];
 } urus_str;
 
+static void urus_str_retain(urus_str *s) { if (s) s->rc++; }
+static void urus_str_release(urus_str *s) { if (s && --s->rc <= 0) free(s); }
+
 static urus_str *urus_str_new(const char *s, size_t len) {
     urus_str *str = (urus_str *)malloc(sizeof(urus_str) + len + 1);
     str->rc = 1;
     str->len = len;
     memcpy(str->data, s, len);
     str->data[len] = '\0';
-    return str;
+    return (urus_str *)urus_autorelease(str, (urus_dtor_fn)urus_str_release);
 }
 
 static urus_str *urus_str_from(const char *s) {
     return urus_str_new(s, strlen(s));
 }
-
-static void urus_str_retain(urus_str *s) { if (s) s->rc++; }
-static void urus_str_release(urus_str *s) { if (s && --s->rc <= 0) free(s); }
 
 static urus_str *urus_str_concat(urus_str *a, urus_str *b) {
     size_t len = a->len + b->len;
@@ -45,7 +94,7 @@ static urus_str *urus_str_concat(urus_str *a, urus_str *b) {
     memcpy(str->data, a->data, a->len);
     memcpy(str->data + a->len, b->data, b->len);
     str->data[len] = '\0';
-    return str;
+    return (urus_str *)urus_autorelease(str, (urus_dtor_fn)urus_str_release);
 }
 
 // ---- String stdlib ----
@@ -113,7 +162,7 @@ static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
         p = q + old->len;
     }
     strcpy(dst, p);
-    return r;
+    return (urus_str *)urus_autorelease(r, (urus_dtor_fn)urus_str_release);
 }
 
 static bool urus_str_starts_with(urus_str *s, urus_str *prefix) {
@@ -140,15 +189,16 @@ typedef struct {
     size_t len;
     size_t cap;
     size_t elem_size;
+    urus_dtor_fn elem_dtor; // element destructor
     void *data;
 } urus_array;
 
-static urus_array *urus_array_new(size_t elem_size, size_t initial_cap);
+static urus_array *urus_array_new(size_t elem_size, size_t initial_cap, urus_dtor_fn elem_dtor);
 static void urus_array_push(urus_array *arr, const void *elem);
 
 // Forward declare for str_split
 static urus_array *urus_str_split(urus_str *s, urus_str *delim) {
-    urus_array *arr = urus_array_new(sizeof(urus_str *), 4);
+    urus_array *arr = urus_array_new(sizeof(urus_str *), 4, (urus_dtor_fn)urus_str_release);
     if (delim->len == 0) {
         for (size_t i = 0; i < s->len; i++) {
             urus_str *c = urus_str_new(s->data + i, 1);
@@ -168,19 +218,30 @@ static urus_array *urus_str_split(urus_str *s, urus_str *delim) {
     return arr;
 }
 
-static urus_array *urus_array_new(size_t elem_size, size_t initial_cap) {
+static urus_array *urus_array_new(size_t elem_size, size_t initial_cap, urus_dtor_fn elem_dtor) {
     urus_array *arr = (urus_array *)malloc(sizeof(urus_array));
     arr->rc = 1;
     arr->len = 0;
     arr->cap = initial_cap > 0 ? initial_cap : 4;
     arr->elem_size = elem_size;
+    arr->elem_dtor = elem_dtor;
     arr->data = malloc(arr->elem_size * arr->cap);
     return arr;
 }
 
 static void urus_array_retain(urus_array *a) { if (a) a->rc++; }
+
 static void urus_array_release(urus_array *a) {
-    if (a && --a->rc <= 0) { free(a->data); free(a); }
+    if (a->rc && --a->rc <= 0) {
+        if (a->elem_dtor) {
+            for (size_t i = 0; i < a->len; i++) {
+                void **elem_ptr = (void **)((char*)a->data + i + a->elem_size);
+                if (*elem_ptr) a->elem_dtor(*elem_ptr);
+            }
+        }
+        free(a->data);
+        free(a);
+    }
 }
 
 static void urus_array_push(urus_array *arr, const void *elem) {
@@ -386,7 +447,7 @@ static urus_result *urus_result_ok(urus_box *val) {
     r->rc = 1;
     r->tag = 0;
     r->data.ok = *val;
-    return r;
+    return (urus_result *)urus_autorelease(r, (urus_dtor_fn)urus_str_release);
 }
 
 static urus_result *urus_result_err(urus_str *msg) {
@@ -395,7 +456,7 @@ static urus_result *urus_result_err(urus_str *msg) {
     r->tag = 1;
     r->data.err = msg;
     urus_str_retain(msg);
-    return r;
+    return (urus_result *)urus_autorelease(r, (urus_dtor_fn)urus_str_release);
 }
 
 static bool urus_result_is_ok(urus_result *r) { return r->tag == 0; }
@@ -447,6 +508,13 @@ static urus_str *urus_result_unwrap_err(urus_result *r) {
         exit(1);
     }
     return r->data.err;
+}
+
+static void urus_result_release(urus_result *r) {
+    if (r && --r->rc <= 0) {
+        if (r->tag == 1 && r->data.err) urus_str_release(r->data.err);
+        free(r);
+    }
 }
 
 // ============================================================

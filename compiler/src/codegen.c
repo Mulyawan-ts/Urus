@@ -9,6 +9,12 @@
 extern const unsigned char urus_runtime_header_data[];
 extern const unsigned int urus_runtime_header_data_len;
 
+// ---- Forward declarations ----
+static void gen_expr(CodeBuf *buf, AstNode *node);
+static void gen_stmt(CodeBuf *buf, AstNode *node);
+static void gen_block_inner(CodeBuf *buf, AstNode *node, bool is_loop);
+static void gen_block(CodeBuf *buf, AstNode *node);
+
 // ---- Buffer helpers ----
 
 void codegen_init(CodeBuf *buf) {
@@ -18,6 +24,7 @@ void codegen_init(CodeBuf *buf) {
     buf->data[0] = '\0';
     buf->indent = 0;
     buf->tmp_counter = 0;
+    buf->current_scope = NULL;
 }
 
 void codegen_free(CodeBuf *buf) {
@@ -51,10 +58,105 @@ static void emit_indent(CodeBuf *buf) {
     for (int i = 0; i < buf->indent; i++) emit(buf, "    ");
 }
 
-// ---- Forward declarations ----
-static void gen_expr(CodeBuf *buf, AstNode *node);
-static void gen_stmt(CodeBuf *buf, AstNode *node);
-static void gen_block(CodeBuf *buf, AstNode *node);
+static void emit_type_release_cname(CodeBuf *buf, AstType *t, const char *c_name) {
+    if (!t) return;
+    switch(t->kind) {
+    case TYPE_STR:
+        emit(buf, "urus_str_release(%s);\n", c_name);
+        break;
+    case TYPE_ARRAY:
+        if (t->element && t->element->kind == TYPE_STR) {
+            emit(buf, "urus_array_release_str(%s);\n", c_name);
+        } else {
+            emit(buf, "urus_array_release(%s);\n", c_name);
+        }
+        break;
+    case TYPE_NAMED:
+        emit(buf, "%s_release(%s);\n", t->name, c_name);
+        break;
+    case TYPE_RESULT:
+        emit(buf, "urus_result_release(%s);\n", c_name);
+        break;
+    default:
+        break;
+    }
+}
+
+static void emit_type_release_expr(CodeBuf *buf, AstType *t, AstNode *expr) {
+    if (!t) return;
+    switch(t->kind) {
+    case TYPE_STR:
+        emit(buf, "urus_str_release(");
+        gen_expr(buf, expr);
+        emit(buf, ");\n");
+        break;
+    case TYPE_ARRAY:
+        if (t->element && t->element->kind == TYPE_STR) {
+            emit(buf, "urus_array_release_str(");
+        } else {
+            emit(buf, "urus_array_release(");
+        }
+        gen_expr(buf, expr);
+        emit(buf, ");\n");
+        break;
+    case TYPE_NAMED:
+        emit(buf, "%s_release(", t->name);
+        gen_expr(buf, expr);
+        emit(buf, ");\n");
+        break;
+    case TYPE_RESULT:
+        emit(buf, "urus_result_release(", t->name);
+        gen_expr(buf, expr);
+        emit(buf, ");\n");
+        break;
+    default:
+        break;
+    }
+}
+
+// Emit RAII LIFO cleanup
+static void emit_cleanup(CodeBuf *buf, CGScope *s) {
+    if (!s) return;
+    for (int i = s->count - 1; i >= 0; i--) {
+        CGSym *sym = &s->syms[i];
+        emit_indent(buf);
+        emit_type_release_cname(buf, sym->type, sym->c_name);
+    }
+}
+
+// --- RAII Scope Tracking
+
+static bool type_needs_rc(AstType *t) {
+    if (!t) return false;
+    if (t->kind == TYPE_STR || t->kind == TYPE_ARRAY ||
+            t->kind == TYPE_NAMED || t->kind == TYPE_RESULT) return true;
+    return false;
+}
+
+static CGScope *raii_push_scope(CodeBuf *buf, bool is_loop) {
+    CGScope *s = calloc(1, sizeof(CGScope));
+    s->parent = buf->current_scope;
+    s->is_loop = is_loop;
+    buf->current_scope = s;
+    return s;
+}
+
+static void raii_pop_scope(CodeBuf *buf) {
+    CGScope *s = buf->current_scope;
+    buf->current_scope = s->parent;
+    free(s);
+}
+
+// Register variabel to current scope
+static void raii_register(CodeBuf *buf, const char *name, AstType *type) {
+    if (type_needs_rc(type)) {
+        if (buf->current_scope && buf->current_scope->count < 128) {
+            buf->current_scope->syms[buf->current_scope->count].c_name = strdup(name);
+            buf->current_scope->syms[buf->current_scope->count].type = type;
+            buf->current_scope->count++;
+        }
+    }
+}
 
 // ---- Type emission ----
 
@@ -355,17 +457,26 @@ static int gen_expr_pre(CodeBuf *buf, AstNode *node) {
         if (node->resolved_type && node->resolved_type->kind == TYPE_ARRAY) {
             elem = node->resolved_type->element;
         }
+        char dtor_str[128] = "NULL";
+        if (elem && type_needs_rc(elem)) {
+            if (elem->kind == TYPE_STR) strcpy(dtor_str, "(urus_dtor_fn)urus_str_release");
+            else if (elem->kind == TYPE_ARRAY) strcpy(dtor_str, "(urus_dtor_fn)urus_array_release");
+            else if (elem->kind == TYPE_RESULT) strcpy(dtor_str, "(urus_dtor_fn)urus_result_release");
+            else if (elem->kind == TYPE_NAMED) snprintf(dtor_str, sizeof(dtor_str), "(urus_dtor_fn)%s_release", elem->name);
+        }
+
         const char *sz = elem_sizeof(elem);
         const char *ctype = elem_ctype(elem);
         emit_indent(buf);
-        emit(buf, "urus_array* _urus_arr_%d = urus_array_new(%s, %d);\n",
-             tmp, sz, node->as.array_lit.count > 0 ? node->as.array_lit.count : 4);
+        emit(buf, "urus_array* _urus_arr_%d = urus_array_new(%s, %d, %s);\n",
+             tmp, sz, node->as.array_lit.count > 0 ? node->as.array_lit.count : 4, dtor_str);
         for (int i = 0; i < node->as.array_lit.count; i++) {
             emit_indent(buf);
             emit(buf, "urus_array_push(_urus_arr_%d, &(%s){", tmp, ctype);
             gen_expr(buf, node->as.array_lit.elements[i]);
             emit(buf, "});\n");
         }
+
         return tmp;
     }
     case NODE_STRUCT_LIT: {
@@ -379,6 +490,10 @@ static int gen_expr_pre(CodeBuf *buf, AstNode *node) {
              node->as.struct_lit.name, tmp, node->as.struct_lit.name);
         emit_indent(buf);
         emit(buf, "_urus_st_%d->rc = 1;\n", tmp);
+        emit_indent(buf);
+        emit(buf, "urus_autorelease(_urus_st_%d, (urus_dtor_fn)%s_release);\n", tmp, node->as.struct_lit.name);
+
+        // Field assign
         for (int i = 0; i < node->as.struct_lit.field_count; i++) {
             emit_indent(buf);
             emit(buf, "_urus_st_%d->%s = ", tmp, node->as.struct_lit.fields[i].name);
@@ -399,6 +514,10 @@ static int gen_expr_pre(CodeBuf *buf, AstNode *node) {
         emit(buf, "%s* _urus_en_%d = malloc(sizeof(%s));\n", ename, tmp, ename);
         emit_indent(buf);
         emit(buf, "_urus_en_%d->rc = 1;\n", tmp);
+
+        emit_indent(buf);
+        emit(buf, "urus_autorelease(_urus_en_%d, (urus_dtor_fn)%s_release);\n", tmp, ename);
+
         emit_indent(buf);
         emit(buf, "_urus_en_%d->tag = %s_TAG_%s;\n", tmp, ename, vname);
         for (int i = 0; i < node->as.enum_init.arg_count; i++) {
@@ -465,6 +584,15 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
         emit(buf, " %s = ", node->as.let_stmt.name);
         gen_expr(buf, node->as.let_stmt.init);
         emit(buf, ";\n");
+
+        if (type_needs_rc(node->as.let_stmt.type)) {
+            emit_indent(buf);
+            emit(buf, "urus_retain(%s);\n", node->as.let_stmt.name);
+        }
+
+        raii_register(buf, node->as.let_stmt.name, node->as.let_stmt.type);
+        emit_indent(buf);
+        emit(buf, "urus_flush_pool();\n");
         break;
     case NODE_ASSIGN_STMT: {
         // Check if target is array index - use setter instead
@@ -483,6 +611,19 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
             emit(buf, "});\n");
         } else {
             gen_expr_pre(buf, node->as.assign_stmt.value);
+            AstType *target_type = node->as.assign_stmt.target->resolved_type;
+
+            if (type_needs_rc(target_type)) {
+                emit_indent(buf);
+                emit(buf, "urus_retain(");
+                gen_expr(buf, node->as.assign_stmt.value);
+                emit(buf, ");\n");
+
+                // Release old LHS value to prevent memory leak
+                emit_indent(buf);
+                emit_type_release_expr(buf, target_type, node->as.assign_stmt.target);
+            }
+
             emit_indent(buf);
             gen_expr(buf, node->as.assign_stmt.target);
             const char *op = "=";
@@ -496,6 +637,8 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
             emit(buf, " %s ", op);
             gen_expr(buf, node->as.assign_stmt.value);
             emit(buf, ";\n");
+            emit_indent(buf);
+            emit(buf, "urus_flush_pool();\n");
         }
         break;
     }
@@ -522,11 +665,12 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
         emit(buf, "while (");
         gen_expr(buf, node->as.while_stmt.condition);
         emit(buf, ") ");
-        gen_block(buf, node->as.while_stmt.body);
+        gen_block_inner(buf, node->as.while_stmt.body, true);
         emit(buf, "\n");
         break;
     case NODE_FOR_STMT:
         if (node->as.for_stmt.is_foreach) {
+            // TODO: use gen_block_inner than creating manual scope
             // For-each: for item in array { ... }
             gen_expr_pre(buf, node->as.for_stmt.iterable);
             int tmp = buf->tmp_counter++;
@@ -577,28 +721,69 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
                  node->as.for_stmt.inclusive ? "<=" : "<");
             gen_expr(buf, node->as.for_stmt.end);
             emit(buf, "; %s++) ", node->as.for_stmt.var_name);
-            gen_block(buf, node->as.for_stmt.body);
+            gen_block_inner(buf, node->as.for_stmt.body, true);
             emit(buf, "\n");
         }
         break;
     case NODE_RETURN_STMT:
         if (node->as.return_stmt.value) {
             gen_expr_pre(buf, node->as.return_stmt.value);
-        }
-        emit_indent(buf);
-        if (node->as.return_stmt.value) {
-            emit(buf, "return ");
+
+            int tmp = buf->tmp_counter++;
+            AstType *t = node->as.return_stmt.value->resolved_type;
+
+            emit_indent(buf);
+            gen_type(buf, t);
+            emit(buf, " _urus_ret_%d = ", tmp);
             gen_expr(buf, node->as.return_stmt.value);
             emit(buf, ";\n");
+
+            if (type_needs_rc(t)) {
+                // Retain to prevent local scope deletion
+                emit_indent(buf);
+                emit(buf, "urus_retain(_urus_ret_%d);\n", tmp);
+
+                char dtor_str[128] = "NULL";
+                if (t->kind == TYPE_STR) strcpy(dtor_str, "(urus_dtor_fn)urus_str_release");
+                else if (t->kind == TYPE_ARRAY) strcpy(dtor_str, "(urus_dtor_fn)urus_array_release");
+                else if (t->kind == TYPE_RESULT) strcpy(dtor_str, "(urus_dtor_fn)urus_result_release");
+                else if (t->kind == TYPE_NAMED) snprintf(dtor_str, sizeof(dtor_str), "(urus_dtor_fn)%s_release", t->name);
+
+                emit_indent(buf);
+                emit(buf, "urus_autorelease(_urus_ret_%d, %s);\n", tmp, dtor_str);
+            }
+
+            // Recursive resource cleanup
+            for (CGScope *s = buf->current_scope; s != NULL; s = s->parent) {
+                emit_cleanup(buf, s);
+            }
+
+            emit_indent(buf);
+            emit(buf, "return _urus_ret_%d;\n", tmp);
         } else {
+            for (CGScope *s = buf->current_scope; s != NULL; s = s->parent) {
+                emit_cleanup(buf, s);
+            }
+
+            emit_indent(buf);
             emit(buf, "return;\n");
         }
         break;
     case NODE_BREAK_STMT:
+        for (CGScope *s = buf->current_scope; s != NULL; s = s->parent) {
+            emit_cleanup(buf, s);
+            if (!s->is_loop) break;
+        }
+
         emit_indent(buf);
         emit(buf, "break;\n");
         break;
     case NODE_CONTINUE_STMT:
+        for (CGScope *s = buf->current_scope; s != NULL; s = s->parent) {
+            emit_cleanup(buf, s);
+            if (!s->is_loop) break;
+        }
+
         emit_indent(buf);
         emit(buf, "continue;\n");
         break;
@@ -607,6 +792,9 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
         emit_indent(buf);
         gen_expr(buf, node->as.expr_stmt.expr);
         emit(buf, ";\n");
+
+        emit_indent(buf);
+        emit(buf, "urus_flush_pool();\n");
         break;
     case NODE_BLOCK:
         gen_block(buf, node);
@@ -662,15 +850,23 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
     }
 }
 
-static void gen_block(CodeBuf *buf, AstNode *node) {
+static void gen_block_inner(CodeBuf *buf, AstNode *node, bool is_loop) {
     emit(buf, "{\n");
     buf->indent++;
+    CGScope *s = raii_push_scope(buf, is_loop);
     for (int i = 0; i < node->as.block.stmt_count; i++) {
         gen_stmt(buf, node->as.block.stmts[i]);
     }
+    emit_cleanup(buf, s);
+    raii_pop_scope(buf);
+    emit_indent(buf);
+    emit(buf, "urus_flush_pool();");
     buf->indent--;
     emit_indent(buf);
     emit(buf, "}");
+}
+static void gen_block(CodeBuf *buf, AstNode *node) {
+    gen_block_inner(buf, node, false); // regular scope
 }
 
 // ---- Top-level declarations ----
@@ -744,9 +940,8 @@ static void gen_fn_decl(CodeBuf *buf, AstNode *node) {
 
 void codegen_generate(CodeBuf *buf, AstNode *program) {
     emit(buf, "// Generated by: URUS Compiler, version %s\n", URUS_COMPILER_VERSION);
-    emit(buf, "/* URUS Builtin START */\n");
     emit(buf, "%.*s\n", urus_runtime_header_data_len, urus_runtime_header_data);
-    emit(buf, "/* URUS Builtin END*/\n");
+    emit(buf, "\n\n/* +---+ Program start +---+ */\n");
 
     // Pass 1: struct and enum forward declarations
     for (int i = 0; i < program->as.program.decl_count; i++) {
@@ -784,6 +979,26 @@ void codegen_generate(CodeBuf *buf, AstNode *program) {
         }
     }
 
+    // Pass 2C: struct release function
+    for (int i = 0; i < program->as.program.decl_count; i++) {
+        AstNode *d = program->as.program.decls[i];
+        if (d->kind == NODE_STRUCT_DECL) {
+            emit(buf, "static void %s_release(%s *obj) {\n", d->as.struct_decl.name, d->as.struct_decl.name);
+            emit(buf, "  if (obj && --obj->rc <= 0) {\n");
+            for (int j = 0; j < d->as.struct_decl.field_count; j++) {
+                AstType *ft = d->as.struct_decl.fields[j].type;
+                if (type_needs_rc(ft)) {
+                    char field_acc[strlen(d->as.struct_decl.fields[j].name)];
+                    emit(buf, "    ");
+                    snprintf(field_acc, sizeof(field_acc), "obj->%s", d->as.struct_decl.fields[j].name);
+                    emit_type_release_cname(buf, ft, field_acc);
+                }
+            }
+            emit(buf, "    free(obj);\n");
+            emit(buf, "  }\n}\n\n");
+        }
+    }
+
     // Pass 3: function forward declarations
     for (int i = 0; i < program->as.program.decl_count; i++) {
         AstNode *d = program->as.program.decls[i];
@@ -802,8 +1017,5 @@ void codegen_generate(CodeBuf *buf, AstNode *program) {
     }
 
     // C main wrapper
-    emit(buf, "int main(void) {\n");
-    emit(buf, "    urus_main();\n");
-    emit(buf, "    return 0;\n");
-    emit(buf, "}\n");
+    emit(buf, "int main(void) {\n  urus_main();\n  urus_flush_pool();\n  return 0;\n}");
 }
