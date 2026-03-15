@@ -57,28 +57,6 @@ static void emit_indent(CodeBuf *buf) {
     for (int i = 0; i < buf->indent; i++) emit(buf, "    ");
 }
 
-// Print origial statement in source to comment, for debugging
-static void emit_source_comment(CodeBuf *buf, AstNode *node) {
-    if (!node || !node->tok.start) return;
-
-    emit(buf, "\n");
-    emit_indent(buf);
-    emit(buf, "// %d:%d:  ", node->tok.line, node->tok.col);
-
-    const char *p = node->tok.start;
-    bool in_str = false;
-
-    while (*p && *p != '\n' && *p != '\r') {
-        emit(buf, "%c", *p);
-        if (*p == '"' && (p == node->tok.start || *(p-1) != '\\')) {
-            in_str = !in_str;
-        }
-        if (!in_str && (*p == ';' || *p == '{')) break;
-        p++;
-    }
-    emit(buf, "\n");
-}
-
 static void emit_type_drop_cname(CodeBuf *buf, AstType *t, const char *c_name) {
     if (!t) return;
     switch(t->kind) {
@@ -526,8 +504,6 @@ static int gen_expr_pre(CodeBuf *buf, AstNode *node) {
 static void gen_stmt(CodeBuf *buf, AstNode *node) {
     if (!node) return;
 
-    if (node->kind != NODE_BLOCK) emit_source_comment(buf, node);
-
     switch (node->kind) {
     case NODE_LET_STMT:
         // Emit pre-statements for complex initializers
@@ -774,7 +750,7 @@ static void gen_block(CodeBuf *buf, AstNode *node) {
     }
     buf->indent--;
     emit_indent(buf);
-    emit(buf, "}\n");
+    emit(buf, "}");
 }
 
 // ---- Top-level declarations ----
@@ -827,8 +803,6 @@ static void gen_fn_forward(CodeBuf *buf, AstNode *node) {
 }
 
 static void gen_fn_decl(CodeBuf *buf, AstNode *node) {
-    emit_source_comment(buf, node);
-
     bool is_main = strcmp(node->as.fn_decl.name, "main") == 0;
     gen_type(buf, node->as.fn_decl.return_type);
     emit(buf, " %s(", is_main ? "urus_main" : node->as.fn_decl.name);
@@ -870,7 +844,6 @@ void codegen_generate(CodeBuf *buf, AstNode *program) {
     for (int i = 0; i < program->as.program.decl_count; i++) {
         AstNode *d = program->as.program.decls[i];
         if (d->kind == NODE_STRUCT_DECL) {
-            emit_source_comment(buf, d);
             emit(buf, "struct %s {\n", d->as.struct_decl.name);
             for (int j = 0; j < d->as.struct_decl.field_count; j++) {
                 emit(buf, "    ");
@@ -885,7 +858,6 @@ void codegen_generate(CodeBuf *buf, AstNode *program) {
     for (int i = 0; i < program->as.program.decl_count; i++) {
         AstNode *d = program->as.program.decls[i];
         if (d->kind == NODE_ENUM_DECL) {
-            emit_source_comment(buf, d);
             gen_enum_decl(buf, d);
         }
     }
