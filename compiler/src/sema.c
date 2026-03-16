@@ -161,7 +161,7 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
         if (op == TOK_EQ || op == TOK_NEQ || op == TOK_LT || op == TOK_GT ||
             op == TOK_LTE || op == TOK_GTE) {
             if (!ast_types_equal(lt, rt)) {
-                sema_error(ctx, &node->tok, "cannot compare '%s' with '%s'",
+                sema_error(ctx, &node->as.binary.left->tok, "cannot compare '%s' with '%s'",
                            ast_type_str(lt), ast_type_str(rt));
             }
             return set_type(node, ast_type_simple(TYPE_BOOL));
@@ -169,11 +169,11 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
 
         if (op == TOK_AND || op == TOK_OR) {
             if (lt->kind != TYPE_BOOL) {
-                sema_error(ctx, &node->tok, "left operand of '%s' must be bool, got '%s'",
+                sema_error(ctx, &node->as.binary.left->tok, "left operand of '%s' must be bool, got '%s'",
                            token_type_name(op), ast_type_str(lt));
             }
             if (rt->kind != TYPE_BOOL) {
-                sema_error(ctx, &node->tok, "right operand of '%s' must be bool, got '%s'",
+                sema_error(ctx, &node->as.binary.right->tok, "right operand of '%s' must be bool, got '%s'",
                            token_type_name(op), ast_type_str(rt));
             }
             return set_type(node, ast_type_simple(TYPE_BOOL));
@@ -190,7 +190,7 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
                            token_type_name(op), ast_type_str(lt), ast_type_str(rt));
                 return set_type(node, ast_type_clone(lt));
             }
-            if (lt->kind != TYPE_INT && lt->kind != TYPE_FLOAT) {
+            if (op != TOK_PLUS && lt->kind != TYPE_INT && lt->kind != TYPE_FLOAT) {
                 sema_error(ctx, &node->tok, "operator '%s' requires numeric types, got '%s'",
                            token_type_name(op), ast_type_str(lt));
             }
@@ -205,13 +205,13 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
         if (!t) return set_type(node, ast_type_simple(TYPE_VOID));
         if (node->as.unary.op == TOK_NOT) {
             if (t->kind != TYPE_BOOL) {
-                sema_error(ctx, &node->tok, "'!' requires bool, got '%s'", ast_type_str(t));
+                sema_error(ctx, &node->as.unary.operand->tok, "'!' requires bool, got '%s'", ast_type_str(t));
             }
             return set_type(node, ast_type_simple(TYPE_BOOL));
         }
         if (node->as.unary.op == TOK_MINUS) {
             if (t->kind != TYPE_INT && t->kind != TYPE_FLOAT) {
-                sema_error(ctx, &node->tok, "unary '-' requires numeric type, got '%s'", ast_type_str(t));
+                sema_error(ctx, &node->as.unary.operand->tok, "unary '-' requires numeric type, got '%s'", ast_type_str(t));
             }
             return set_type(node, ast_type_clone(t));
         }
@@ -355,13 +355,17 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
     case NODE_FIELD_ACCESS: {
         AstType *obj_type = check_expr(ctx, node->as.field_access.object);
         if (!obj_type || obj_type->kind != TYPE_NAMED) {
-            sema_error(ctx, &node->tok, "field access on non-struct type '%s'",
+            sema_error(ctx, &node->as.field_access.object->tok, "field access on non-struct type '%s'",
                        ast_type_str(obj_type));
             return set_type(node, ast_type_simple(TYPE_VOID));
         }
         Symbol *st = scope_lookup(ctx->current, obj_type->name);
         if (!st || !st->is_struct) {
-            sema_error(ctx, &node->tok, "unknown struct '%s'", obj_type->name);
+            if (!st->is_struct) {
+                sema_error(ctx, &node->tok, "'%s' is not struct", obj_type->name);
+            } else {
+                sema_error(ctx, &node->tok, "unknown struct '%s'", obj_type->name);
+            }
             return set_type(node, ast_type_simple(TYPE_VOID));
         }
         for (int i = 0; i < st->field_count; i++) {
@@ -379,10 +383,10 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
         AstType *obj_type = check_expr(ctx, node->as.index_expr.object);
         AstType *idx_type = check_expr(ctx, node->as.index_expr.index);
         if (idx_type && idx_type->kind != TYPE_INT) {
-            sema_error(ctx, &node->tok, "array index must be int, got '%s'", ast_type_str(idx_type));
+            sema_error(ctx, &node->as.index_expr.index->tok, "array index must be int, got '%s'", ast_type_str(idx_type));
         }
         if (!obj_type || obj_type->kind != TYPE_ARRAY) {
-            sema_error(ctx, &node->tok, "index operator on non-array type '%s'", ast_type_str(obj_type));
+            sema_error(ctx, &node->as.index_expr.object->tok, "index operator on non-array type '%s'", ast_type_str(obj_type));
             return set_type(node, ast_type_simple(TYPE_VOID));
         }
         return set_type(node, ast_type_clone(obj_type->element));
@@ -395,11 +399,11 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
             if (i == 0) {
                 elem_type = t;
             } else if (!ast_types_equal(elem_type, t)) {
-                sema_error(ctx, &node->tok, "array element type mismatch: expected '%s', got '%s'",
+                sema_error(ctx, &node->as.array_lit.elements[i]->tok, "array element type mismatch: expected '%s', got '%s'",
                            ast_type_str(elem_type), ast_type_str(t));
             }
         }
-        // NOTE: 'left = []' considered as INT type
+        // element type is default considered as INT type
         if (!elem_type) elem_type = ast_type_simple(TYPE_INT);
         return set_type(node, ast_type_array(ast_type_clone(elem_type)));
     }
@@ -444,7 +448,11 @@ static AstType *check_expr(Sema *ctx, AstNode *node) {
         const char *ename = node->as.enum_init.enum_name;
         Symbol *sym = scope_lookup(ctx->current, ename);
         if (!sym || !sym->is_enum) {
-            sema_error(ctx, &node->tok, "unknown enum '%s'", ename);
+            if (!sym->is_enum) {
+                sema_error(ctx, &node->tok, "'%s' is not enum", ename);
+            } else {
+                sema_error(ctx, &node->tok, "unknown enum '%s'", ename);
+            }
             for (int i = 0; i < node->as.enum_init.arg_count; i++)
                 check_expr(ctx, node->as.enum_init.args[i]);
             return set_type(node, ast_type_simple(TYPE_VOID));
@@ -513,7 +521,7 @@ static void check_stmt(Sema *ctx, AstNode *node) {
             if (!(decl_type->kind == TYPE_RESULT &&
                   (node->as.let_stmt.init->kind == NODE_OK_EXPR ||
                    node->as.let_stmt.init->kind == NODE_ERR_EXPR))) {
-                sema_error(ctx, &node->tok, "cannot assign '%s' to variable of type '%s'",
+                sema_error(ctx, &node->as.let_stmt.init->tok, "cannot assign '%s' to variable of type '%s'",
                            ast_type_str(init_type), ast_type_str(decl_type));
             }
         }
@@ -536,13 +544,13 @@ static void check_stmt(Sema *ctx, AstNode *node) {
         if (node->as.assign_stmt.target->kind == NODE_IDENT) {
             Symbol *sym = scope_lookup(ctx->current, node->as.assign_stmt.target->as.ident.name);
             if (sym && !sym->is_mut && !sym->is_fn) {
-                sema_error(ctx, &node->tok, "cannot assign to immutable variable '%s'",
+                sema_error(ctx, &node->as.assign_stmt.value->tok, "cannot assign to immutable variable '%s'",
                            node->as.assign_stmt.target->as.ident.name);
             }
         }
 
         if (target_type && val_type && (!ast_types_equal(target_type, val_type)) && !ast_types_compatible(val_type, target_type)) {
-            sema_error(ctx, &node->tok, "cannot assign '%s' to '%s'",
+            sema_error(ctx, &node->as.assign_stmt.value->tok, "cannot assign '%s' to '%s'",
                        ast_type_str(val_type), ast_type_str(target_type));
         }
         break;
@@ -551,7 +559,7 @@ static void check_stmt(Sema *ctx, AstNode *node) {
     case NODE_IF_STMT: {
         AstType *cond = check_expr(ctx, node->as.if_stmt.condition);
         if (cond && cond->kind != TYPE_BOOL) {
-            sema_error(ctx, &node->tok, "if condition must be bool, got '%s'", ast_type_str(cond));
+            sema_error(ctx, &node->as.if_stmt.condition->tok, "if condition must be bool, got '%s'", ast_type_str(cond));
         }
         check_block(ctx, node->as.if_stmt.then_block);
         if (node->as.if_stmt.else_branch) {
@@ -567,7 +575,7 @@ static void check_stmt(Sema *ctx, AstNode *node) {
     case NODE_WHILE_STMT: {
         AstType *cond = check_expr(ctx, node->as.while_stmt.condition);
         if (cond && cond->kind != TYPE_BOOL) {
-            sema_error(ctx, &node->tok, "while condition must be bool, got '%s'", ast_type_str(cond));
+            sema_error(ctx, &node->as.while_stmt.condition->tok, "while condition must be bool, got '%s'", ast_type_str(cond));
         }
         ctx->loop_depth++;
         check_block(ctx, node->as.while_stmt.body);
@@ -580,7 +588,7 @@ static void check_stmt(Sema *ctx, AstNode *node) {
             // For-each over array
             AstType *iter_type = check_expr(ctx, node->as.for_stmt.iterable);
             if (!iter_type || iter_type->kind != TYPE_ARRAY) {
-                sema_error(ctx, &node->tok, "for-each requires array type, got '%s'",
+                sema_error(ctx, &node->as.for_stmt.iterable->tok, "for-each requires array type, got '%s'",
                            ast_type_str(iter_type));
             }
             AstType *elem_type = (iter_type && iter_type->kind == TYPE_ARRAY && iter_type->element)
@@ -607,10 +615,10 @@ static void check_stmt(Sema *ctx, AstNode *node) {
             AstType *start = check_expr(ctx, node->as.for_stmt.start);
             AstType *end = check_expr(ctx, node->as.for_stmt.end);
             if (start && start->kind != TYPE_INT) {
-                sema_error(ctx, &node->tok, "for range start must be int, got '%s'", ast_type_str(start));
+                sema_error(ctx, &node->as.for_stmt.start->tok, "for range start must be int, got '%s'", ast_type_str(start));
             }
             if (end && end->kind != TYPE_INT) {
-                sema_error(ctx, &node->tok, "for range end must be int, got '%s'", ast_type_str(end));
+                sema_error(ctx, &node->as.for_stmt.end->tok, "for range end must be int, got '%s'", ast_type_str(end));
             }
 
             Scope *body_scope = scope_new(ctx->current);
@@ -641,7 +649,7 @@ static void check_stmt(Sema *ctx, AstNode *node) {
                 if (!(ctx->current_fn_return->kind == TYPE_RESULT &&
                       (node->as.return_stmt.value->kind == NODE_OK_EXPR ||
                        node->as.return_stmt.value->kind == NODE_ERR_EXPR))) {
-                    sema_error(ctx, &node->tok, "return type mismatch: expected '%s', got '%s'",
+                    sema_error(ctx, &node->as.return_stmt.value->tok, "return type mismatch: expected '%s', got '%s'",
                                ast_type_str(ctx->current_fn_return), ast_type_str(t));
                 }
             }
@@ -677,13 +685,13 @@ static void check_stmt(Sema *ctx, AstNode *node) {
     case NODE_MATCH: {
         AstType *target_type = check_expr(ctx, node->as.match_stmt.target);
         if (!target_type || target_type->kind != TYPE_NAMED) {
-            sema_error(ctx, &node->tok, "match target must be an enum type, got '%s'",
+            sema_error(ctx, &node->as.match_stmt.target->tok, "match target must be an enum type, got '%s'",
                        ast_type_str(target_type));
             break;
         }
         Symbol *enum_sym = scope_lookup(ctx->current, target_type->name);
         if (!enum_sym || !enum_sym->is_enum) {
-            sema_error(ctx, &node->tok, "match target type '%s' is not an enum", target_type->name);
+            sema_error(ctx, &node->as.match_stmt.target->tok, "match target type '%s' is not an enum", target_type->name);
             break;
         }
 
@@ -698,12 +706,12 @@ static void check_stmt(Sema *ctx, AstNode *node) {
                 }
             }
             if (!variant) {
-                sema_error(ctx, &node->tok, "enum '%s' has no variant '%s'",
+                sema_error(ctx, &node->as.match_stmt.target->tok, "enum '%s' has no variant '%s'",
                            target_type->name, arm->variant_name);
                 continue;
             }
             if (arm->binding_count != variant->field_count) {
-                sema_error(ctx, &node->tok, "variant '%s' has %d fields, got %d bindings",
+                sema_error(ctx, &node->as.match_stmt.target->tok, "variant '%s' has %d fields, got %d bindings",
                            arm->variant_name, variant->field_count, arm->binding_count);
             }
 
@@ -907,7 +915,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
                 if (p_decl->default_value != NULL) {
                     AstType *def_type = check_expr(&ctx, p_decl->default_value);
                     if (!ast_types_equal(def_type, p_decl->type)) {
-                        sema_error(&ctx, &d->tok, "default value type mismatch for parameter '%s': expected '%s' but got '%s'",
+                        sema_error(&ctx, &p_decl->default_value->tok, "default value type mismatch for parameter '%s': expected '%s' but got '%s'",
                                 p_decl->name, ast_type_str(p_decl->type), ast_type_str(def_type));
                     }
                 }
