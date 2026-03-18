@@ -255,6 +255,9 @@ struct AstNode {
     // Filled by semantic analysis
     AstType *resolved_type;
 
+    // Parser flags
+    bool parenthesized; // wrapped in redundant ()
+
     // Filled by codegen (temp variable ID)
     int _codegen_tmp;
 };

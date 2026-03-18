@@ -128,6 +128,15 @@ static AstType *set_type(AstNode *node, AstType *t) {
 static AstType *check_expr(Sema *ctx, AstNode *node) {
     if (!node) return NULL;
 
+    // Warn about unnecessary parentheses: ((expr)), (literal), (ident)
+    if (node->parenthesized) {
+        if (node->kind == NODE_INT_LIT || node->kind == NODE_FLOAT_LIT ||
+            node->kind == NODE_BOOL_LIT || node->kind == NODE_STR_LIT ||
+            node->kind == NODE_IDENT) {
+            sema_warn(ctx, &node->tok, "unnecessary parentheses");
+        }
+    }
+
     switch (node->kind) {
     case NODE_INT_LIT:
         return set_type(node, ast_type_simple(TYPE_INT));

@@ -431,6 +431,7 @@ static AstNode *parse_primary(Parser *p) {
     if (match(p, TOK_LPAREN)) {
         AstNode *expr = parse_expr(p);
         expect(p, TOK_RPAREN, "expected ')'");
+        expr->parenthesized = true;
         return expr;
     }
 
