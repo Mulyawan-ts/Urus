@@ -16,7 +16,7 @@
 // ============================================================
 
 #if defined(__clang__) || defined(__GNUC__)
-    #define URUS_RAII(dtor) __attribute((cleanup(dtor)))
+    #define URUS_RAII(dtor) __attribute__((cleanup(dtor)))
 #else
     #define URUS_RAII(dtor)
     #warning "__attribute(()) is not supported in your compiler. RAII is not gonna work."
