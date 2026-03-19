@@ -24,6 +24,24 @@
 #define URUS_MOVE(type, dest, src) do { dest = src; src = NULL; } while(0) // move semantic
 typedef void (*urus_drop_fn)(void*);
 
+static void *urus_alloc(size_t size) {
+    void *ptr = malloc(size);
+    if (!ptr) {
+        fprintf(stderr, "Error: memory allocation failed (size=%zu)\n", size);
+        exit(1);
+    }
+    return ptr;
+}
+
+static void *urus_realloc(void *ptr, size_t size) {
+    void *new_ptr = realloc(ptr, size);
+    if (!new_ptr) {
+        fprintf(stderr, "Error: memory reallocation failed (size=%zu)\n", size);
+        exit(1);
+    }
+    return new_ptr;
+}
+
 // ============================================================
 // String (ref-counted)
 // ============================================================
@@ -34,7 +52,7 @@ typedef struct {
 } urus_str;
 
 static urus_str *urus_str_new(const char *s, size_t len) {
-    urus_str *str = (urus_str *)malloc(sizeof(urus_str) + len + 1);
+    urus_str *str = (urus_str *)urus_alloc(sizeof(urus_str) + len + 1);
     str->len = len;
     memcpy(str->data, s, len);
     str->data[len] = '\0';
@@ -61,7 +79,7 @@ static urus_str *urus_str_from(const char *s) {
 
 static urus_str *urus_str_concat(urus_str *a, urus_str *b) {
     size_t len = a->len + b->len;
-    urus_str *str = (urus_str *)malloc(sizeof(urus_str) + len + 1);
+    urus_str *str = (urus_str *)urus_alloc(sizeof(urus_str) + len + 1);
     str->len = len;
     memcpy(str->data, a->data, a->len);
     memcpy(str->data + a->len, b->data, b->len);
@@ -121,7 +139,8 @@ static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
     // Use signed arithmetic to avoid unsigned underflow
     ptrdiff_t diff = (ptrdiff_t)new_s->len - (ptrdiff_t)old->len;
     size_t new_len = (size_t)((ptrdiff_t)s->len + count * diff);
-    urus_str *r = (urus_str *)malloc(sizeof(urus_str) + new_len + 1);
+    urus_str *r = (urus_str *)urus_alloc(sizeof(urus_str) + new_len + 1);
+    r->len = new_len;
 
     char *dst = r->data;
     p = s->data;
@@ -189,12 +208,12 @@ static urus_array *urus_str_split(urus_str *s, urus_str *delim) {
 }
 
 static urus_array *urus_array_new(size_t elem_size, size_t initial_cap, urus_drop_fn elem_drop) {
-    urus_array *arr = (urus_array *)malloc(sizeof(urus_array));
+    urus_array *arr = (urus_array *)urus_alloc(sizeof(urus_array));
     arr->len = 0;
     arr->cap = initial_cap > 0 ? initial_cap : 4;
     arr->elem_size = elem_size;
     arr->elem_drop = elem_drop;
-    arr->data = malloc(arr->elem_size * arr->cap);
+    arr->data = urus_alloc(arr->elem_size * arr->cap);
     return arr;
 }
 
@@ -216,7 +235,7 @@ static void urus_array_drop(urus_array **ap) {
 static void urus_array_push(urus_array *arr, const void *elem) {
     if (arr->len >= arr->cap) {
         arr->cap *= 2;
-        arr->data = realloc(arr->data, arr->elem_size * arr->cap);
+        arr->data = urus_realloc(arr->data, arr->elem_size * arr->cap);
     }
     void *target = (char *)arr->data + (arr->len * arr->elem_size);
     memcpy(target, elem, arr->elem_size);
@@ -260,7 +279,13 @@ static int64_t urus_len(urus_array *arr) {
 }
 
 static void urus_pop(urus_array *arr) {
-    if (arr->len > 0) arr->len--;
+    if (arr->len > 0) {
+        arr->len--;
+        if (arr->elem_drop) {
+            void *obj = *(void**)((char*)arr->data + (arr->len * arr->elem_size));
+            if (obj) arr->elem_drop(&obj);
+        }
+    }
 }
 
 // ============================================================
@@ -367,12 +392,17 @@ static urus_str *urus_read_file(urus_str *path) {
     }
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
+    if (sz < 0) {
+        fprintf(stderr, "Error: ftell failed for file '%s'\n", path->data);
+        fclose(f);
+        return urus_str_from("");
+    }
     fseek(f, 0, SEEK_SET);
-    char *buf = malloc((size_t)sz + 1);
-    fread(buf, 1, (size_t)sz, f);
-    buf[sz] = '\0';
+    char *buf = (char *)urus_alloc((size_t)sz + 1);
+    size_t read_bytes = fread(buf, 1, (size_t)sz, f);
+    buf[read_bytes] = '\0';
     fclose(f);
-    urus_str *s = urus_str_new(buf, (size_t)sz);
+    urus_str *s = urus_str_new(buf, read_bytes);
     free(buf);
     return s;
 }
@@ -411,14 +441,14 @@ typedef struct {
 } urus_result;
 
 static urus_result *urus_result_ok(urus_box *val) {
-    urus_result *r = (urus_result *)malloc(sizeof(urus_result));
+    urus_result *r = (urus_result *)urus_alloc(sizeof(urus_result));
     r->tag = 0;
     r->data.ok = *val;
     return r;
 }
 
 static urus_result *urus_result_err(urus_str *msg) {
-    urus_result *r = (urus_result *)malloc(sizeof(urus_result));
+    urus_result *r = (urus_result *)urus_alloc(sizeof(urus_result));
     r->tag = 1;
     r->data.err = msg;
     return r;
