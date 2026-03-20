@@ -827,8 +827,10 @@ static AstNode *parse_let(Parser *p) {
     }
 
     Token name = expect(p, TOK_IDENT, "expected variable name");
-    expect(p, TOK_COLON, "expected ':' after variable name");
-    AstType *type = parse_type(p);
+    AstType *type = NULL;
+    if (match(p, TOK_COLON)) {
+        type = parse_type(p);
+    }
     expect(p, TOK_ASSIGN, "expected '=' in let statement");
     AstNode *init = parse_expr(p);
     expect(p, TOK_SEMICOLON, "expected ';' after let statement");

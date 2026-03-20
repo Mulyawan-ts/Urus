@@ -514,6 +514,15 @@ static void check_stmt(SemaCtx *ctx, AstNode *node) {
             break;
         }
 
+        // Type inference: if no type annotation, use init type
+        if (!decl_type && init_type) {
+            decl_type = ast_type_clone(init_type);
+            node->as.let_stmt.type = decl_type;
+        } else if (!decl_type && !init_type) {
+            sema_error(ctx, &node->tok, "cannot infer type for variable '%s'",
+                       node->as.let_stmt.name);
+        }
+
         if (init_type && decl_type && (!ast_types_equal(init_type, decl_type) && !ast_types_compatible(init_type, decl_type))) {
             // Allow Result type coercion (Ok/Err assign to Result<T,E>)
             if (!(decl_type->kind == TYPE_RESULT &&
