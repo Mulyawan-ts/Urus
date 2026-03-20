@@ -5,6 +5,8 @@ rune cube(x) { x * x * x }
 rune sum3(a, b, c) { a + b + c }
 rune max(a, b) { if a > b { a } else { b } }
 rune min(a, b) { if a < b { a } else { b } }
+rune debug(msg, val) { print(msg); print(val); }
+rune repeat_print(x) { print(x); print(x); }
 
 fn main(): void {
     print(square!(5));
@@ -22,4 +24,7 @@ fn main(): void {
 
     print(max!(10, 20));
     print(min!(10, 20));
+
+    debug!("count", 42);
+    repeat_print!(99);
 }

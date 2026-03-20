@@ -451,7 +451,26 @@ static AstNode *parse_primary(Parser *p) {
                     p->count = exp_count;
                     p->pos = 0;
 
-                    AstNode *result = parse_expr(p);
+                    // Detect if body is statement-level (contains semicolons)
+                    AstNode *result;
+                    bool has_semicolon = false;
+                    for (int i = 0; i < exp_count; i++) {
+                        if (expanded[i].type == TOK_SEMICOLON) { has_semicolon = true; break; }
+                    }
+                    if (has_semicolon) {
+                        // Statement rune: parse multiple statements, wrap in block
+                        AstNode *stmts[256];
+                        int stmt_count = 0;
+                        while (!check(p, TOK_EOF) && stmt_count < 256) {
+                            stmts[stmt_count++] = parse_statement(p);
+                        }
+                        result = ast_new(NODE_BLOCK, t);
+                        result->as.block.stmts = malloc(sizeof(AstNode *) * (size_t)stmt_count);
+                        memcpy(result->as.block.stmts, stmts, sizeof(AstNode *) * (size_t)stmt_count);
+                        result->as.block.stmt_count = stmt_count;
+                    } else {
+                        result = parse_expr(p);
+                    }
 
                     // Restore parser state
                     p->tokens = saved_tokens;
@@ -1023,6 +1042,12 @@ static AstNode *parse_statement(Parser *p) {
     }
 
     AstNode *expr = parse_expr(p);
+
+    // Statement rune expansion returns a NODE_BLOCK — return directly
+    if (expr->kind == NODE_BLOCK) {
+        match(p, TOK_SEMICOLON); // consume optional trailing ;
+        return expr;
+    }
 
     // Postfix increment/decrement: x++; or x--;
     if (is_lvalue(expr) && (check(p, TOK_PLUSPLUS) || check(p, TOK_MINUSMINUS))) {
