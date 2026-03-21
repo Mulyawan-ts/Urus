@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-V0.2/3(A)-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-V0.3.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/build-passing-brightgreen" alt="Build" />
   <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platform" />
@@ -28,7 +28,7 @@
 
 ## Language Status
 
-URUS **V0.2/3(A) "Added"** is in active development. The core language syntax and features are functional. The project follows a custom versioning scheme: `V{major}.{minor}/{patch}`.
+URUS **V0.3.0** is in active development. Major update with tuples, runes (macros), type inference, tuple destructuring, if-expressions, HTTP built-ins, and memory safety improvements.
 
 ---
 
@@ -36,13 +36,11 @@ URUS **V0.2/3(A) "Added"** is in active development. The core language syntax an
 
 | Goal | How |
 |------|-----|
-| **Safer than C** | Reference counting, bounds checking, immutable by default |
+| **Safer than C** | RAII memory management, bounds checking, immutable by default |
 | **Simpler than Rust** | No borrow checker, no lifetimes — just write code |
 | **Faster than Python** | Compiles to native binary via C11 |
 | **More portable than Go** | Transpiles to standard C11 — runs anywhere GCC runs |
-| **Modern syntax** | Enums, pattern matching, string interpolation, Result type |
-
-> Note: URUS is starting to slowly move to **RAII** than **Reference counting** for more efficient & faster
+| **Modern syntax** | Enums, pattern matching, string interpolation, Result type, tuples, macros |
 
 ---
 
@@ -115,6 +113,7 @@ urusc hello.urus -o hello
 | `str` | UTF-8 string (ref-counted) | `urus_str*` |
 | `void` | No value | `void` |
 | `[T]` | Dynamic array of T | `urus_array*` |
+| `(T1, T2)` | Tuple (stack-allocated) | `struct { T1 f0; T2 f1; }` |
 | `Result<T, E>` | Ok or Err value | `urus_result` |
 
 ### Variables
@@ -123,6 +122,54 @@ urusc hello.urus -o hello
 let x: int = 10;           // immutable
 let mut count: int = 0;    // mutable
 count += 1;
+
+// Type inference (type annotation optional)
+let name = "hello";        // inferred as str
+let pi = 3.14;             // inferred as float
+```
+
+### Tuples
+
+```rust
+let t: (int, str) = (42, "hello");
+print(t.0);    // 42
+print(t.1);    // hello
+
+// Tuple destructuring
+let (x, y) = get_pair();
+
+// Destructuring in for-each
+let pairs: [(int, str)] = [(1, "a"), (2, "b")];
+for (k, v) in pairs {
+    print(k);
+    print(v);
+}
+```
+
+### Runes (Macros)
+
+```rust
+// Expression rune
+rune square(x) { x * x }
+
+// If-expression rune
+rune max(a, b) { if a > b { a } else { b } }
+
+// Statement rune (multi-line)
+rune debug(msg, val) { print(msg); print(val); }
+
+fn main(): void {
+    print(square!(5));       // 25
+    print(max!(10, 20));     // 20
+    debug!("count", 42);     // prints: count \n 42
+}
+```
+
+### If-Expressions
+
+```rust
+let label = if x > 5 { "big" } else { "small" };
+print(if x > 0 { "positive" } else { "negative" });
 ```
 
 ### Functions
@@ -337,6 +384,13 @@ fn main(): void {
 | `unwrap(result)` | Extract Ok value (aborts on Err) |
 | `unwrap_err(result)` | Extract Err value (aborts on Ok) |
 
+### HTTP
+
+| Function | Description |
+|----------|-------------|
+| `http_get(url)` | HTTP GET request, returns response body |
+| `http_post(url, body)` | HTTP POST request, returns response body |
+
 ### Misc
 
 | Function | Description |
@@ -349,7 +403,7 @@ fn main(): void {
 ## CLI Usage
 
 ```
-URUS Compiler V0.2/2(F)
+URUS Compiler V0.3.0
 
 usage: urusc <file.urus> [options]
 
@@ -397,11 +451,11 @@ Source (.urus)
 
 | Metric | Value |
 |--------|-------|
-| Version | V0.2/3(A) "Added" |
-| Compiler Size | ~464 KB (standalone, runtime embedded) |
-| Runtime | ~16 KB header-only (embedded in binary) |
-| Compiler LOC | ~4,700+ |
-| Runtime LOC | ~467 |
+| Version | V0.3.0 |
+| Compiler Size | ~500 KB (standalone, runtime embedded) |
+| Runtime | ~18 KB header-only (embedded in binary) |
+| Compiler LOC | ~5,500+ |
+| Runtime LOC | ~595 |
 | Output | C11 compliant |
 | Platforms | Windows, Linux, macOS |
 | Build System | CMake 3.10+ |
@@ -466,7 +520,7 @@ Urus/
 | Feature | URUS | C | Rust | Go | Python |
 |---------|:----:|:-:|:----:|:--:|:------:|
 | Static typing | Yes | Yes | Yes | Yes | No |
-| Memory safety | RC + bounds | Manual | Ownership | GC | GC |
+| Memory safety | RAII + bounds | Manual | Ownership | GC | GC |
 | Pattern matching | Yes | No | Yes | No | Limited |
 | String interpolation | Yes | No | No | No | Yes |
 | Result type | Yes | No | Yes | No | No |
@@ -479,38 +533,41 @@ Urus/
 
 ## Roadmap
 
-### V0.3/1 — Quality of Life
-- ~~Default parameter values~~
-- ~~Better error messages with source context~~ *(Done in V0.2/2)*
-- ~~Warning system (unused variables, etc.)~~
-- Multi-line string literals
+### V0.3.0 — Tuples, Macros & Inference (current)
+- ~~Tuple types `(int, str)` with field access `.0`, `.1`~~
+- ~~Tuple destructuring `let (x, y) = expr;`~~
+- ~~Runes — unique macro system with `rune` / `name!()` syntax~~
+- ~~Statement-level runes (multi-line macros)~~
+- ~~If-expressions (ternary) `if cond { a } else { b }`~~
+- ~~Type inference `let x = 42;`~~
+- ~~HTTP built-ins `http_get()`, `http_post()`~~
+- ~~String escape sequences `\t`, `\0`~~
+- ~~Memory safety fixes (urus_alloc, urus_pop, read_file)~~
 
-### V0.4/1 — Type System
+### V0.4.0 — Type System
 - Type aliases (`type ID = int;`)
 - Optional type (`Option<T>`)
-- Tuple types (`(int, str)`)
-- Type inference (`let x = 42;`)
+- Generics (`fn max<T>(a: T, b: T): T`)
+- Portable RAII (explicit drop insertion, no `__attribute__` needed)
 
-### V0.5/1 — Methods & Traits
+### V0.5.0 — Methods & Traits
 - Methods (`impl Point { fn distance() }`)
 - Traits / Interfaces
-- Generics (`fn max<T>(a: T, b: T): T`)
 - Closures
+- Bundled TCC as default C backend
 
-### V1.0/1 — Stable Release
+### V1.0.0 — Stable Release
 - Standard library
 - Package manager
 - Full documentation
 - Production-ready
 
-### V2.0/1 — Advanced
+### V2.0.0 — Advanced
 - Async/await
 - Concurrency
 - WASM target
 - Self-hosting compiler
 - LSP server for IDE support
-
-Full roadmap: [documentation/roadmap](./documentation/roadmap/)
 
 ---
 
@@ -569,6 +626,8 @@ Thanks to everyone who has contributed to URUS!
     <td align="center"><a href="https://github.com/fepfitra"><img src="https://github.com/fepfitra.png" width="80" /><br /><sub><b>fepfitra</b></sub></a></td>
     <td align="center"><a href="https://github.com/lordpaijo"><img src="https://github.com/lordpaijo.png" width="80" /><br /><sub><b>lordpaijo</b></sub></a></td>
     <td align="center"><a href="https://github.com/XBotzLauncher"><img src="https://github.com/XBotzLauncher.png" width="80" /><br /><sub><b>XBotzLauncher</b></sub></a></td>
+    <td align="center"><a href="https://github.com/aimardcr"><img src="https://github.com/aimardcr.png" width="80" /><br /><sub><b>aimardcr</b></sub></a></td>
+    <td align="center"><a href="https://github.com/billalxcode"><img src="https://github.com/billalxcode.png" width="80" /><br /><sub><b>billalxcode</b></sub></a></td>
   </tr>
 </table>
 

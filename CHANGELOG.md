@@ -1,5 +1,39 @@
 # Changelog
 
+## V0.3.0 (2026-03-21)
+
+### New Features
+- **Tuple Types**: `(int, str)` — stack-allocated compound types with `.0`, `.1` field access (#15)
+- **Tuple Destructuring**: `let (x, y): (int, str) = get_pair();` and `for (k, v) in pairs { }` (#74)
+- **Runes (Macro System)**: `rune square(x) { x * x }` invoked with `square!(5)` — Urus's unique macro system (#66)
+- **Statement-level Runes**: Rune bodies with semicolons expand as statement blocks (#75)
+- **If-Expressions**: `if cond { a } else { b }` as expressions, compiles to C ternary (#71, #79)
+- **Type Inference**: `let x = 42;` — type annotation is now optional, inferred from initializer (#78)
+- **HTTP Built-ins**: `http_get(url)` and `http_post(url, body)` via curl (#87)
+- **String Escape Sequences**: `\t` (tab) and `\0` (null) now supported (#77)
+
+### Bug Fixes
+- Fixed `urus_str_replace()` missing `r->len` assignment — uninitialized length field (#89 VULN-01)
+- Fixed `urus_pop()` memory leak — now calls `elem_drop` before discarding element (#89 VULN-02)
+- Fixed unchecked `malloc`/`realloc` — added `urus_alloc`/`urus_realloc` wrappers with NULL checks (#89 VULN-03)
+- Fixed `urus_read_file()` — added `ftell()` error check and `fread()` return capture (#89 VULN-04)
+- Fixed array of tuples/results producing incorrect C codegen — `elem_sizeof`/`elem_ctype` now handle TYPE_TUPLE and TYPE_RESULT (#70)
+- Fixed tuples containing heap types (str, array) leaking memory — generate drop functions for tuples with heap fields (#73)
+- Fixed rune table overflow silently discarding macros — now emits error (#76)
+- Fixed rune argument count mismatch giving unhelpful error message (#72)
+
+### Improvements
+- RAII cleanup for tuple types containing heap-allocated fields
+- Tuple typedef system with unique C type names per tuple signature
+- Compiler version bumped to 0.3.0
+
+### Contributors
+- **aimardcr** — security vulnerability report (#89)
+- **billalxcode** — HTTP request feature request (#87)
+- **RasyaAndrean** — all feature implementations, bug fixes, documentation
+
+---
+
 ## V0.2/3(A) "Added" (2026-03-17)
 
 ### New Features
