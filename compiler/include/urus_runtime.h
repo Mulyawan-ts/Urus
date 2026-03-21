@@ -1,6 +1,10 @@
 #ifndef URUS_RUNTIME_H
 #define URUS_RUNTIME_H
 
+#ifndef _WIN32
+#  define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
