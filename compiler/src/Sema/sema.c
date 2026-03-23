@@ -861,7 +861,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
                 Param *p_decl = &d->as.fn_decl.params[j];
                 SemaSymbol *p = scope_add(fn_scope, d->as.fn_decl.params[j].name, d->tok);
                 p->type = d->as.fn_decl.params[j].type;
-                p->is_mut = false;
+                p->is_mut = p_decl->is_mut;
 
                 if (p_decl->default_value != NULL) {
                     AstType *def_type = check_expr(&ctx, p_decl->default_value);

@@ -1096,11 +1096,13 @@ static AstNode *parse_fn_decl(Parser *p) {
                 cap *= 2;
                 params = realloc(params, sizeof(Param) * (size_t)cap);
             }
+            bool param_mut = match(p, TOK_MUT);
             Token pname = expect(p, TOK_IDENT, "expected parameter name");
             expect(p, TOK_COLON, "expected ':' after parameter name");
             AstType *ptype = parse_type(p);
             params[count].name = tok_str(pname);
             params[count].type = ptype;
+            params[count].is_mut = param_mut;
 
             // parse default parameter value
             if (match(p, TOK_ASSIGN)) {

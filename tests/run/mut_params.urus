@@ -1,0 +1,19 @@
+fn double_it(mut x: int): int {
+    x = x * 2;
+    return x;
+}
+
+fn greet(mut name: str): str {
+    name = "Hello, " + name + "!";
+    return name;
+}
+
+fn immutable_param(x: int): int {
+    return x + 1;
+}
+
+fn main(): void {
+    print(to_str(double_it(5)));
+    print(greet("World"));
+    print(to_str(immutable_param(10)));
+}

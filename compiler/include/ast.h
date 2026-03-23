@@ -86,6 +86,7 @@ typedef struct {
     char *name;
     AstType *type;
     AstNode *default_value;
+    bool is_mut;
 } Param;
 
 // ---- Struct field init ----
