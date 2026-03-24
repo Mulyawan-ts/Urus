@@ -52,15 +52,17 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(urusc PRIVATE m)
 endif()
 
+# _._. Install urusc ._._
 install(TARGETS urusc DESTINATION bin)
 
-# install stdlib/* to local lib
+# _._. Install stdlib/* to local lib ._._
 if(WIN32)
     # Windows: Program Files\Urusc\lib
-    set(URUS_LIB_DIR "Program Files\Urusc\lib")
+    # Path separator already handled by CMake
+    set(URUS_LIB_DIR "Program Files/Urusc/lib")
 elseif(DEFINED ENV{PREFIX})
     # Termux sets $PREFIX; honour it.
-    set(URUS_DEFAULT_STDPATH "$ENV{PREFIX}/lib/urusc")
+    set(URUS_LIB_DIR "$ENV{PREFIX}/lib/urusc")
 else()
     # Linux/Unix: /usr/local/lib/urusc
     set(URUS_LIB_DIR "/usr/local/lib/urusc")
