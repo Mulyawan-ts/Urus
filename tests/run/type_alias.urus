@@ -1,0 +1,24 @@
+type ID = int;
+type Name = str;
+type Numbers = [int];
+
+fn greet(id: ID, name: Name): void {
+    print(f"User {id}: {name}");
+}
+
+fn sum(nums: Numbers): int {
+    let mut total: int = 0;
+    for n in nums {
+        total += n;
+    }
+    return total;
+}
+
+fn main(): void {
+    let user_id: ID = 42;
+    let user_name: Name = "Alice";
+    greet(user_id, user_name);
+
+    let nums: Numbers = [10, 20, 30];
+    print(to_str(sum(nums)));
+}

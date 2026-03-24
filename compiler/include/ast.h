@@ -45,6 +45,7 @@ typedef enum {
     NODE_STRUCT_DECL,
     NODE_ENUM_DECL,
     NODE_IMPORT,
+    NODE_TYPE_ALIAS,
 
     // Statements
     NODE_BLOCK,
@@ -297,6 +298,12 @@ struct AstNode {
             AstType *type;
             AstNode *value;
         } const_decl;
+
+        // NODE_TYPE_ALIAS
+        struct {
+            char *name;
+            AstType *type;
+        } type_alias;
     } as;
 
     // Filled by semantic analysis

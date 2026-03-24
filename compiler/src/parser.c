@@ -1359,6 +1359,19 @@ static AstNode *parse_const_decl(Parser *p) {
     return n;
 }
 
+static AstNode *parse_type_alias(Parser *p) {
+    Token t = expect(p, TOK_TYPE, "expected 'type'");
+    Token name = expect(p, TOK_IDENT, "expected alias name");
+    expect(p, TOK_ASSIGN, "expected '=' in type alias");
+    AstType *type = parse_type(p);
+    expect(p, TOK_SEMICOLON, "expected ';' after type alias");
+
+    AstNode *n = ast_new(NODE_TYPE_ALIAS, t);
+    n->as.type_alias.name = tok_str(name);
+    n->as.type_alias.type = type;
+    return n;
+}
+
 static AstNode *parse_declaration(Parser *p) {
     if (check(p, TOK_FN)) return parse_fn_decl(p);
     if (check(p, TOK_STRUCT)) return parse_struct_decl(p);
@@ -1366,6 +1379,7 @@ static AstNode *parse_declaration(Parser *p) {
     if (check(p, TOK_IMPORT)) return parse_import(p);
     if (check(p, TOK_RUNE)) return parse_rune_decl(p);
     if (check(p, TOK_CONST)) return parse_const_decl(p);
+    if (check(p, TOK_TYPE)) return parse_type_alias(p);
     return parse_statement(p);
 }
 

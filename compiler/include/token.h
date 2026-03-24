@@ -32,6 +32,7 @@ typedef enum {
     TOK_RUNE,
     TOK_CONST,
     TOK_DO,
+    TOK_TYPE,
 
     // Type keywords
     TOK_INT,

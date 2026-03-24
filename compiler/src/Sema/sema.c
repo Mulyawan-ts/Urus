@@ -40,6 +40,30 @@ static AstType *check_expr(SemaCtx *ctx, AstNode *node);
 static void check_stmt(SemaCtx *ctx, AstNode *node);
 static void check_block(SemaCtx *ctx, AstNode *node);
 
+// ---- Type alias resolution ----
+
+static AstType *sema_resolve_type(SemaCtx *ctx, AstType *t) {
+    if (!t) return t;
+    if (t->kind == TYPE_NAMED) {
+        SemaSymbol *sym = scope_lookup(ctx->current, t->name);
+        if (sym && sym->is_type_alias) {
+            return ast_type_clone(sym->alias_type);
+        }
+    }
+    if (t->kind == TYPE_ARRAY && t->element) {
+        t->element = sema_resolve_type(ctx, t->element);
+    }
+    if (t->kind == TYPE_RESULT) {
+        t->ok_type = sema_resolve_type(ctx, t->ok_type);
+        t->err_type = sema_resolve_type(ctx, t->err_type);
+    }
+    if (t->kind == TYPE_TUPLE) {
+        for (int i = 0; i < t->element_count; i++)
+            t->element_types[i] = sema_resolve_type(ctx, t->element_types[i]);
+    }
+    return t;
+}
+
 // ---- Expression type checking ----
 
 static AstType *set_type(AstNode *node, AstType *t) {
@@ -532,7 +556,8 @@ static void check_stmt(SemaCtx *ctx, AstNode *node) {
     switch (node->kind) {
     case NODE_LET_STMT: {
         AstType *init_type = check_expr(ctx, node->as.let_stmt.init);
-        AstType *decl_type = node->as.let_stmt.type;
+        AstType *decl_type = sema_resolve_type(ctx, node->as.let_stmt.type);
+        node->as.let_stmt.type = decl_type;
 
         if (node->as.let_stmt.is_destructure) {
             // Tuple destructuring: let (x, y): (int, str) = expr;
@@ -916,6 +941,29 @@ bool sema_analyze(AstNode *program, const char *filename) {
             s->type = d->as.const_decl.type;
             s->is_mut = false;
             s->is_referenced = true; // don't warn unused for constants
+        } else if (d->kind == NODE_TYPE_ALIAS) {
+            if (scope_lookup_local(global, d->as.type_alias.name)) {
+                sema_error(&ctx, &d->tok, "duplicate type alias '%s'", d->as.type_alias.name);
+                continue;
+            }
+            SemaSymbol *s = scope_add(global, d->as.type_alias.name, d->tok);
+            s->is_type_alias = true;
+            s->alias_type = d->as.type_alias.type;
+            s->type = d->as.type_alias.type;
+            s->is_referenced = true;
+        }
+    }
+
+    // Pass 1b: resolve type aliases in all type annotations
+    // When a TYPE_NAMED references a type alias, replace it with the aliased type
+    for (int i = 0; i < global->count; i++) {
+        SemaSymbol *s = &global->syms[i];
+        if (s->is_type_alias && s->alias_type && s->alias_type->kind == TYPE_NAMED) {
+            SemaSymbol *target = scope_lookup(global, s->alias_type->name);
+            if (target && target->is_type_alias) {
+                s->alias_type = target->alias_type;
+                s->type = target->alias_type;
+            }
         }
     }
 
@@ -925,6 +973,12 @@ bool sema_analyze(AstNode *program, const char *filename) {
         if (d->kind == NODE_FN_DECL) {
             SemaScope *fn_scope = scope_new(global);
             ctx.current = fn_scope;
+
+            // Resolve type aliases in return type and params
+            d->as.fn_decl.return_type = sema_resolve_type(&ctx, d->as.fn_decl.return_type);
+            for (int j = 0; j < d->as.fn_decl.param_count; j++)
+                d->as.fn_decl.params[j].type = sema_resolve_type(&ctx, d->as.fn_decl.params[j].type);
+
             ctx.current_fn_return = d->as.fn_decl.return_type;
 
             for (int j = 0; j < d->as.fn_decl.param_count; j++) {

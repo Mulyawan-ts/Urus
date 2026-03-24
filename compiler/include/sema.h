@@ -21,6 +21,8 @@ typedef struct {
     bool is_enum;
     EnumVariant *variants;
     int variant_count;
+    bool is_type_alias;
+    AstType *alias_type;
 } SemaSymbol;
 
 typedef struct Scope {

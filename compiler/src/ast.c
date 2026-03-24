@@ -457,6 +457,9 @@ void ast_print(AstNode *node, int ind) {
         printf("ConstDecl '%s'\n", node->as.const_decl.name);
         ast_print(node->as.const_decl.value, ind + 1);
         break;
+    case NODE_TYPE_ALIAS:
+        printf("TypeAlias '%s'\n", node->as.type_alias.name);
+        break;
     }
 }
 
@@ -674,6 +677,10 @@ void ast_free(AstNode *node) {
         free(node->as.const_decl.name);
         ast_type_free(node->as.const_decl.type);
         ast_free(node->as.const_decl.value);
+        break;
+    case NODE_TYPE_ALIAS:
+        free(node->as.type_alias.name);
+        ast_type_free(node->as.type_alias.type);
         break;
     case NODE_INT_LIT:
     case NODE_FLOAT_LIT:
