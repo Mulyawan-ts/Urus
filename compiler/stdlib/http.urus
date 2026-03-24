@@ -1,0 +1,101 @@
+__emit__("""
+    #ifdef _WIN32
+    #include <windows.h>
+    #include <winhttp.h>
+    #pragma comment(lib, "winhttp.lib")
+    #else
+    // On Unix, we use popen with curl
+    #endif
+
+    static bool urus_http_validate_input(const char *s) {
+        for (const char *p = s; *p; p++) {
+            if (*p == '"' || *p == '`' || *p == '$' || *p == ';' ||
+                *p == '|' || *p == '&' || *p == '\\' || *p == '\n' || *p == '\r') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static urus_str *urus_http_get(urus_str *url) {
+        if (!urus_http_validate_input(url->data)) {
+            fprintf(stderr, "Error: http_get URL contains unsafe characters\n");
+            return urus_str_from("");
+        }
+        size_t cmd_len = url->len + 32;
+        char *cmd = (char *)urus_alloc(cmd_len);
+        snprintf(cmd, cmd_len, "curl -s \"%s\"", url->data);
+        FILE *fp = popen(cmd, "r");
+        free(cmd);
+        if (!fp) {
+            fprintf(stderr, "Error: failed to execute curl\n");
+            return urus_str_from("");
+        }
+        size_t cap = 4096;
+        size_t len = 0;
+        char *buf = (char *)urus_alloc(cap);
+        size_t n;
+        while ((n = fread(buf + len, 1, cap - len - 1, fp)) > 0) {
+            len += n;
+            if (len + 1 >= cap) {
+                cap *= 2;
+                buf = (char *)urus_realloc(buf, cap);
+            }
+        }
+        pclose(fp);
+        buf[len] = '\0';
+        urus_str *result = urus_str_new(buf, len);
+        free(buf);
+        return result;
+    }
+
+    static urus_str *urus_http_post(urus_str *url, urus_str *body) {
+        if (!urus_http_validate_input(url->data) || !urus_http_validate_input(body->data)) {
+            fprintf(stderr, "Error: http_post URL or body contains unsafe characters\n");
+            return urus_str_from("");
+        }
+        size_t cmd_len = url->len + body->len + 64;
+        char *cmd = (char *)urus_alloc(cmd_len);
+        snprintf(cmd, cmd_len, "curl -s -X POST -d \"%s\" \"%s\"", body->data, url->data);
+        FILE *fp = popen(cmd, "r");
+        free(cmd);
+        if (!fp) {
+            fprintf(stderr, "Error: failed to execute curl\n");
+            return urus_str_from("");
+        }
+        size_t cap = 4096;
+        size_t len = 0;
+        char *buf = (char *)urus_alloc(cap);
+        size_t n;
+        while ((n = fread(buf + len, 1, cap - len - 1, fp)) > 0) {
+            len += n;
+            if (len + 1 >= cap) {
+                cap *= 2;
+                buf = (char *)urus_realloc(buf, cap);
+            }
+        }
+        pclose(fp);
+        buf[len] = '\0';
+        urus_str *result = urus_str_new(buf, len);
+        free(buf);
+        return result;
+    }
+""");
+
+fn http_get(url: str): str {
+    let result: str = "";
+    __emit__("""
+        // result: urus_str* <- urus_str* (return from urus_http_get);
+        result = urus_http_get(url);
+    """);
+    return result;
+}
+
+fn http_post(url: str, body: str): str {
+    let result: str = "";
+    __emit__("""
+        // result: urus_str* <- urus_str* (return from urus_http_post);
+        result = urus_http_post(url, body);
+    """);
+    return result;
+}

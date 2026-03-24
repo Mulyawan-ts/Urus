@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 void lexer_init(Lexer *l, const char *source, size_t length) {
     l->source = source;
@@ -15,6 +16,11 @@ void lexer_init(Lexer *l, const char *source, size_t length) {
 static char peek(Lexer *l) {
     if (l->pos >= l->length) return '\0';
     return l->source[l->pos];
+}
+
+static char peek_at(Lexer *l, size_t offset) {
+    if (l->pos + offset >= l->length) return '\0';
+    return l->source[l->pos + offset];
 }
 
 static char peek_next(Lexer *l) {
@@ -104,14 +110,38 @@ static TokenType check_keyword(const char *start, size_t len) {
 
 static Token lex_string(Lexer *l) {
     const char *start = l->source + l->pos;
-    advance(l); // skip opening "
-    while (l->pos < l->length && peek(l) != '"') {
-        if (peek(l) == '\\') advance(l);
+    bool is_multiline = false;
+
+    // check if this multiline string (""") start
+    if (peek(l) == '"' && peek_next(l) == '"' && peek_at(l, 2) == '"') {
+        is_multiline = true;
+        advance(l);
         advance(l);
     }
-    if (l->pos >= l->length) return error_token(l, "unterminated string");
-    advance(l); // skip closing "
-    return make_token(l, TOK_STR_LIT, start, (size_t)(l->source + l->pos - start));
+
+    advance(l); // skip opening "
+
+    while (l->pos < l->length) {
+        if (is_multiline) {
+            if (peek(l) == '"' && peek_next(l) == '"' && peek_at(l, 2) == '"') {
+                advance(l); advance(l); advance(l);
+                size_t len = (size_t)(l->source + l->pos - start);
+                return make_token(l, TOK_STR_LIT, start, len);
+            }
+        } else {
+            if (peek(l) == '"') {
+                advance(l);
+                size_t len = (size_t)(l->source + l->pos - start);
+                return make_token(l, TOK_STR_LIT, start, len);
+            }
+            if (peek(l) == '\n') break;
+        }
+
+        if (peek(l) == '\\') advance(l);
+        advance(l); // skip closing "
+    }
+
+    return error_token(l, is_multiline ? "Unterminated multiline string" : "Unterminated string");
 }
 
 static Token lex_fstring(Lexer *l) {

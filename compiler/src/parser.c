@@ -66,6 +66,9 @@ static char *tok_str(Token t) {
 }
 
 static char *tok_str_value(Token t) {
+    if (t.length >= 6 && strncmp(t.start, "\"\"\"", 3) == 0) {
+        return ast_strdup(t.start + 3, t.length - 6);
+    }
     return ast_strdup(t.start + 1, t.length - 2);
 }
 
@@ -1053,35 +1056,14 @@ static AstNode *parse_match(Parser *p) {
 }
 
 static AstNode *parse_emit(Parser *p, bool is_toplevel) {
-    Token emit_tok = expect(p, TOK_EMIT, "expected 'emit'");
-    expect(p, TOK_LBRACE, "expected '{'");
-
-    // take raw content
-    const char *body_start = NULL;
-    int depth = 1;
-    if (p->pos < p->count) {
-        body_start = p->tokens[p->pos].start;
-    }
-    while (!at_end(p) && depth > 0) {
-        if (check(p, TOK_LBRACE)) depth++;
-        else if (check(p, TOK_RBRACE)) { depth--; if (depth == 0) break; }
-        advance_tok(p);
-    }
-
-    const char *body_end = p->tokens[p->pos].start;
-    char *raw_content = NULL;
-    if (body_start && body_end >= body_start) {
-        size_t len = (size_t)(body_end - body_start);
-        raw_content = malloc(len + 1);
-        memcpy(raw_content, body_start, len);
-        raw_content[len] = '\0';
-    } else {
-        raw_content = strdup("");
-    }
-    expect(p, TOK_RBRACE, "expected '}'");
+    Token emit_tok = expect(p, TOK_EMIT, "expected __emit__");
+    expect(p, TOK_LPAREN, "expected '('");
+    Token str_tok = expect(p, TOK_STR_LIT, "expected string literal after __emit__");
+    expect(p, TOK_RPAREN, "expected ')'");
+    expect(p, TOK_SEMICOLON, "expected ';' after __emit__");
 
     AstNode *n = ast_new(NODE_EMIT_STMT, emit_tok);
-    n->as.emit_stmt.content = raw_content;
+    n->as.emit_stmt.content = tok_str_value(str_tok);
     n->as.emit_stmt.is_toplevel = is_toplevel;
     return n;
 }

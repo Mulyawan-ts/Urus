@@ -28,7 +28,7 @@ void get_local_libpath(char *out, size_t size) {
     // Windows, check registry or fallback to default
     const char *drive = getenv("SystemDrive");
     if (!drive) drive = "C:";
-    snprintf(out, size, "%s\\Urusc\\Lib", drive);
+    snprintf(out, size, "%s\\Program Files\\Urusc\\Lib", drive);
 
 #elif defined(__ANDROID__)
     // Android / Termux
@@ -39,20 +39,6 @@ void get_local_libpath(char *out, size_t size) {
         // Android native (not Termux)
         snprintf(out, size, "/system/lib/urusc");
     }
-
-#elif defined(__APPLE__)
-    // macOS check Homebrew ARM, Homebrew Intel, and then fallback
-    const char *homebrew = getenv("HOMEBREW_PREFIX");
-    if (homebrew) {
-        snprintf(out, size, "%s/lib/urusc", homebrew);
-    } else {
-        // fallback to Apple system
-        snprintf(out, size, "/usr/lib/urusc");
-    }
-
-#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-    // BSD
-    snprintf(out, size, "/usr/local/lib/urusc");
 
 #elif defined(__linux__)
     const char *prefix = getenv("URUSCPATH");
@@ -146,6 +132,7 @@ bool preprocess_imports(AstNode *program, const char *base_file) {
         char *source = read_file(path, &len);
         if (!source) {
             fprintf(stderr, "Error: cannot import '%s'\n", d->as.import_decl.path);
+            if (d->as.import_decl.is_stdlib) fprintf(stderr, "Tip: make sure you've installed urus stdlib correctly in your environment\n");
             return false;
         }
 

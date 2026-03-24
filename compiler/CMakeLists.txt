@@ -53,3 +53,19 @@ if(UNIX AND NOT APPLE)
 endif()
 
 install(TARGETS urusc DESTINATION bin)
+
+# install stdlib/* to local lib
+if(WIN32)
+    # Windows: Program Files\Urusc\lib
+    set(URUS_LIB_DIR "Program Files\Urusc\lib")
+elseif(DEFINED ENV{PREFIX})
+    # Termux sets $PREFIX; honour it.
+    set(URUS_DEFAULT_STDPATH "$ENV{PREFIX}/lib/urusc")
+else()
+    # Linux/Unix: /usr/local/lib/urusc
+    set(URUS_LIB_DIR "/usr/local/lib/urusc")
+endif()
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/stdlib/"
+        DESTINATION "${URUS_LIB_DIR}"
+        FILES_MATCHING PATTERN "*.urus")
