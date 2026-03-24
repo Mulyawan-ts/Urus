@@ -3,6 +3,7 @@
 #include "parser.h"
 #include "util.h"
 #include "ast.h"
+#include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,65 @@ static bool already_imported(const char *path) {
     }
     return false;
 }
+
+void get_local_libpath(char *out, size_t size) {
+
+#if defined(_WIN32)
+    // Windows, check registry or fallback to default
+    const char *drive = getenv("SystemDrive");
+    if (!drive) drive = "C:";
+    snprintf(out, size, "%s\\Program Files\\Urusc\\Lib", drive);
+
+#elif defined(__ANDROID__)
+    // Android / Termux
+    const char *termux = getenv("PREFIX");
+    if (termux) {
+        snprintf(out, size, "%s/lib/urusc", termux);
+    } else {
+        // Android native (not Termux)
+        snprintf(out, size, "/system/lib/urusc");
+    }
+
+#elif defined(__linux__)
+    const char *prefix = getenv("URUSCPATH");
+    if (prefix) {
+        snprintf(out, size, "%s", prefix);
+    } else {
+        char local_path[512];
+        snprintf(local_path, sizeof(local_path),
+                 "/usr/local/lib/urusc");
+
+        // if local exists = the user is building the compiler itself
+        FILE *f = fopen(local_path, "r");
+        if (f) {
+            fclose(f);
+            snprintf(out, size, "%s", local_path);
+        } else {
+            snprintf(out, size, "/usr/lib/urusc");
+        }
+    }
+
+#else
+    // fallback POSIX generic
+    snprintf(out, size, "/usr/local/lib/urusc");
+#endif
+}
+
+// resolve library import path
+static char *resolve_stdlib_path(const char *module_name) {
+    char urus_path[PATH_MAX];
+    get_local_libpath(urus_path, sizeof(urus_path));
+
+    size_t base_len = strlen(urus_path);
+    size_t name_len = strlen(module_name);
+    // +1 for sep, +5 for ".urus", +1 for '\0'
+    char *full = malloc(base_len + 1 + name_len + 5 + 1);
+    sprintf(full, "%s%c%s.urus", urus_path, URUSC_PATHSEP, module_name);
+
+    return full;
+}
+
+// resolve relative import path
 static char *resolve_import_path(const char *base_file, const char *import_path) {
     // Find last / or backslash in base_file
     const char *last_sep = NULL;
@@ -48,7 +108,13 @@ bool preprocess_imports(AstNode *program, const char *base_file) {
         AstNode *d = program->as.program.decls[i];
         if (d->kind != NODE_IMPORT) continue;
 
-        char *path = resolve_import_path(base_file, d->as.import_decl.path);
+        char *path;
+
+        if (d->as.import_decl.is_stdlib) {
+            path = resolve_stdlib_path(d->as.import_decl.path);
+        } else {
+            path = resolve_import_path(base_file, d->as.import_decl.path);
+        }
 
         if (already_imported(path)) {
             free(path);
@@ -66,6 +132,7 @@ bool preprocess_imports(AstNode *program, const char *base_file) {
         char *source = read_file(path, &len);
         if (!source) {
             fprintf(stderr, "Error: cannot import '%s'\n", d->as.import_decl.path);
+            if (d->as.import_decl.is_stdlib) fprintf(stderr, "Tip: make sure you've installed urus stdlib correctly in your environment\n");
             return false;
         }
 
@@ -111,6 +178,7 @@ bool preprocess_imports(AstNode *program, const char *base_file) {
         // Insert imported declarations (skip imports from imported file)
         for (int j = 0; j < imported->as.program.decl_count; j++) {
             if (imported->as.program.decls[j]->kind != NODE_IMPORT) {
+                imported->as.program.decls[j]->is_imported = true;
                 new_decls[pos++] = imported->as.program.decls[j];
                 imported->as.program.decls[j] = NULL; // transfer ownership
             }

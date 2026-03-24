@@ -91,6 +91,7 @@ typedef struct {
     AstType *type;
     AstNode *default_value;
     bool is_mut;
+    Token tok;
 } Param;
 
 // ---- Struct field init ----
@@ -267,7 +268,7 @@ struct AstNode {
         } enum_init;
 
         // NODE_IMPORT
-        struct { char *path; } import_decl;
+        struct { char *path; bool is_stdlib; } import_decl;
 
         // NODE_OK_EXPR / NODE_ERR_EXPR
         struct { AstNode *value; } result_expr;
@@ -314,6 +315,7 @@ struct AstNode {
     AstType *resolved_type;
 
     // Parser flags
+    bool is_imported; // prevent unused warning
     bool parenthesized; // wrapped in redundant ()
 
     // Filled by codegen (temp variable ID)

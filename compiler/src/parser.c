@@ -66,6 +66,9 @@ static char *tok_str(Token t) {
 }
 
 static char *tok_str_value(Token t) {
+    if (t.length >= 6 && strncmp(t.start, "\"\"\"", 3) == 0) {
+        return ast_strdup(t.start + 3, t.length - 6);
+    }
     return ast_strdup(t.start + 1, t.length - 2);
 }
 
@@ -1053,35 +1056,14 @@ static AstNode *parse_match(Parser *p) {
 }
 
 static AstNode *parse_emit(Parser *p, bool is_toplevel) {
-    Token emit_tok = expect(p, TOK_EMIT, "expected 'emit'");
-    expect(p, TOK_LBRACE, "expected '{'");
-
-    // take raw content
-    const char *body_start = NULL;
-    int depth = 1;
-    if (p->pos < p->count) {
-        body_start = p->tokens[p->pos].start;
-    }
-    while (!at_end(p) && depth > 0) {
-        if (check(p, TOK_LBRACE)) depth++;
-        else if (check(p, TOK_RBRACE)) { depth--; if (depth == 0) break; }
-        advance_tok(p);
-    }
-
-    const char *body_end = p->tokens[p->pos].start;
-    char *raw_content = NULL;
-    if (body_start && body_end >= body_start) {
-        size_t len = (size_t)(body_end - body_start);
-        raw_content = malloc(len + 1);
-        memcpy(raw_content, body_start, len);
-        raw_content[len] = '\0';
-    } else {
-        raw_content = strdup("");
-    }
-    expect(p, TOK_RBRACE, "expected '}'");
+    Token emit_tok = expect(p, TOK_EMIT, "expected __emit__");
+    expect(p, TOK_LPAREN, "expected '('");
+    Token str_tok = expect(p, TOK_STR_LIT, "expected string literal after __emit__");
+    expect(p, TOK_RPAREN, "expected ')'");
+    expect(p, TOK_SEMICOLON, "expected ';' after __emit__");
 
     AstNode *n = ast_new(NODE_EMIT_STMT, emit_tok);
-    n->as.emit_stmt.content = raw_content;
+    n->as.emit_stmt.content = tok_str_value(str_tok);
     n->as.emit_stmt.is_toplevel = is_toplevel;
     return n;
 }
@@ -1178,6 +1160,7 @@ static AstNode *parse_fn_decl(Parser *p) {
             params[count].name = tok_str(pname);
             params[count].type = ptype;
             params[count].is_mut = param_mut;
+            params[count].tok = pname;
 
             // parse default parameter value
             if (match(p, TOK_ASSIGN)) {
@@ -1304,10 +1287,23 @@ static AstNode *parse_enum_decl(Parser *p) {
 
 static AstNode *parse_import(Parser *p) {
     Token import_tok = expect(p, TOK_IMPORT, "expected 'import'");
-    Token path = expect(p, TOK_STR_LIT, "expected module path string");
-    expect(p, TOK_SEMICOLON, "expected ';' after import");
     AstNode *n = ast_new(NODE_IMPORT, import_tok);
-    n->as.import_decl.path = tok_str_value(path);
+
+    if (check(p, TOK_STR_LIT)) {
+        // import "relative/path.urus"
+        Token path = advance_tok(p);
+        n->as.import_decl.path = tok_str_value(path);
+        n->as.import_decl.is_stdlib = false;
+    } else if (check(p, TOK_IDENT)) {
+        // import module_name
+        Token module_name = advance_tok(p);
+        n->as.import_decl.path = tok_str(module_name); // store raw name (e.g "math")
+        n->as.import_decl.is_stdlib = true;
+    } else {
+        error_at(p, current(p), "expected \"FILENAME\" or MODULE_NAME after import");
+    }
+
+    expect(p, TOK_SEMICOLON, "expected ';' after import");
     return n;
 }
 
