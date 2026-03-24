@@ -1,0 +1,22 @@
+const PI: float = 3.14159;
+const MAX_SIZE: int = 100;
+const APP_NAME: str = "TestApp";
+const DEBUG: bool = false;
+
+fn main(): void {
+    print(f"App: {APP_NAME}");
+    print(f"PI: {PI}");
+    print(f"Max: {MAX_SIZE}");
+    if DEBUG {
+        print("debug mode");
+    } else {
+        print("release mode");
+    }
+
+    let area: float = PI * 5.0 * 5.0;
+    print(f"Area: {area}");
+
+    if MAX_SIZE > 50 {
+        print("big");
+    }
+}

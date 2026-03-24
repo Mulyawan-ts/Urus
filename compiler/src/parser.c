@@ -1330,12 +1330,29 @@ static AstNode *parse_rune_decl(Parser *p) {
     return n;
 }
 
+static AstNode *parse_const_decl(Parser *p) {
+    Token t = expect(p, TOK_CONST, "expected 'const'");
+    Token name = expect(p, TOK_IDENT, "expected constant name");
+    expect(p, TOK_COLON, "expected ':' after constant name");
+    AstType *type = parse_type(p);
+    expect(p, TOK_ASSIGN, "expected '=' in const declaration");
+    AstNode *value = parse_expr(p);
+    expect(p, TOK_SEMICOLON, "expected ';' after const declaration");
+
+    AstNode *n = ast_new(NODE_CONST_DECL, t);
+    n->as.const_decl.name = tok_str(name);
+    n->as.const_decl.type = type;
+    n->as.const_decl.value = value;
+    return n;
+}
+
 static AstNode *parse_declaration(Parser *p) {
     if (check(p, TOK_FN)) return parse_fn_decl(p);
     if (check(p, TOK_STRUCT)) return parse_struct_decl(p);
     if (check(p, TOK_ENUM)) return parse_enum_decl(p);
     if (check(p, TOK_IMPORT)) return parse_import(p);
     if (check(p, TOK_RUNE)) return parse_rune_decl(p);
+    if (check(p, TOK_CONST)) return parse_const_decl(p);
     return parse_statement(p);
 }
 

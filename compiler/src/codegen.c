@@ -1236,6 +1236,23 @@ void codegen_generate(CodeBuf *buf, AstNode *program) {
             emit(buf, "typedef struct %s %s;\n", d->as.enum_decl.name, d->as.enum_decl.name);
         }
     }
+
+    // Const declarations
+    for (int i = 0; i < program->as.program.decl_count; i++) {
+        AstNode *d = program->as.program.decls[i];
+        if (d->kind == NODE_CONST_DECL) {
+            AstNode *val = d->as.const_decl.value;
+            if (val->kind == NODE_INT_LIT) {
+                emit(buf, "#define %s ((int64_t)%lld)\n", d->as.const_decl.name, val->as.int_lit.value);
+            } else if (val->kind == NODE_FLOAT_LIT) {
+                emit(buf, "#define %s ((double)%g)\n", d->as.const_decl.name, val->as.float_lit.value);
+            } else if (val->kind == NODE_BOOL_LIT) {
+                emit(buf, "#define %s %s\n", d->as.const_decl.name, val->as.bool_lit.value ? "true" : "false");
+            } else if (val->kind == NODE_STR_LIT) {
+                emit(buf, "static urus_str *%s;\n", d->as.const_decl.name);
+            }
+        }
+    }
     emit(buf, "\n");
 
     // Pass 2: struct definitions
@@ -1364,23 +1381,36 @@ void codegen_generate(CodeBuf *buf, AstNode *program) {
 
     if (main_has_args) {
         emit(buf,
-            "int main(int argc, char **argv) {\n"
+            "int main(int argc, char **argv) {\n");
+    } else {
+        emit(buf,
+            "int main() {\n");
+    }
+
+    // Initialize string constants
+    for (int i = 0; i < program->as.program.decl_count; i++) {
+        AstNode *d = program->as.program.decls[i];
+        if (d->kind == NODE_CONST_DECL && d->as.const_decl.value->kind == NODE_STR_LIT) {
+            emit(buf, "   %s = urus_str_from(\"%s\");\n",
+                 d->as.const_decl.name, d->as.const_decl.value->as.str_lit.value);
+        }
+    }
+
+    if (main_has_args) {
+        emit(buf,
             "   urus_array *_urus_argv = urus_array_new(sizeof(urus_str *), (size_t)argc, (urus_drop_fn)urus_str_drop);\n"
             "   for (int i = 0; i < argc; i++) {\n"
             "       urus_str *s = urus_str_from(argv[i]);\n"
             "       urus_array_push(_urus_argv, &s);\n"
             "   }\n"
             "   urus_main((int64_t)argc, _urus_argv);\n"
-            "   urus_array_drop(&_urus_argv);\n"
-            "   return 0;\n"
-            "}\n"
-        );
+            "   urus_array_drop(&_urus_argv);\n");
     } else {
         emit(buf,
-            "int main() {\n"
-            "   urus_main();\n"
-            "   return 0;\n"
-            "}\n"
-        );
+            "   urus_main();\n");
     }
+
+    emit(buf,
+        "   return 0;\n"
+        "}\n");
 }

@@ -447,6 +447,10 @@ void ast_print(AstNode *node, int ind) {
                node->as.rune_decl.name, node->as.rune_decl.param_count,
                node->as.rune_decl.body_token_count);
         break;
+    case NODE_CONST_DECL:
+        printf("ConstDecl '%s'\n", node->as.const_decl.name);
+        ast_print(node->as.const_decl.value, ind + 1);
+        break;
     }
 }
 
@@ -655,6 +659,11 @@ void ast_free(AstNode *node) {
             free(node->as.rune_decl.param_names[i]);
         free(node->as.rune_decl.param_names);
         free(node->as.rune_decl.body_tokens);
+        break;
+    case NODE_CONST_DECL:
+        free(node->as.const_decl.name);
+        ast_type_free(node->as.const_decl.type);
+        ast_free(node->as.const_decl.value);
         break;
     case NODE_INT_LIT:
     case NODE_FLOAT_LIT:

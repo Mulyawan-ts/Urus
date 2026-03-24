@@ -876,6 +876,25 @@ bool sema_analyze(AstNode *program, const char *filename) {
             s->params = d->as.fn_decl.params;
             s->param_count = d->as.fn_decl.param_count;
             s->return_type = d->as.fn_decl.return_type;
+        } else if (d->kind == NODE_CONST_DECL) {
+            if (scope_lookup_local(global, d->as.const_decl.name)) {
+                sema_error(&ctx, &d->tok, "duplicate constant '%s'", d->as.const_decl.name);
+                continue;
+            }
+            AstNode *val = d->as.const_decl.value;
+            if (val->kind != NODE_INT_LIT && val->kind != NODE_FLOAT_LIT &&
+                val->kind != NODE_STR_LIT && val->kind != NODE_BOOL_LIT) {
+                sema_error(&ctx, &val->tok, "const value must be a literal");
+            }
+            AstType *vt = check_expr(&ctx, val);
+            if (vt && d->as.const_decl.type && !ast_types_equal(vt, d->as.const_decl.type)) {
+                sema_error(&ctx, &val->tok, "const type mismatch: expected '%s', got '%s'",
+                           ast_type_str(d->as.const_decl.type), ast_type_str(vt));
+            }
+            SemaSymbol *s = scope_add(global, d->as.const_decl.name, d->tok);
+            s->type = d->as.const_decl.type;
+            s->is_mut = false;
+            s->is_referenced = true; // don't warn unused for constants
         }
     }
 

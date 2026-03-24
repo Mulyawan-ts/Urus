@@ -79,6 +79,7 @@ typedef enum {
     NODE_TUPLE_LIT,   // (expr1, expr2, ...)
     NODE_IF_EXPR,     // if cond { expr } else { expr } (expression context)
     NODE_RUNE_DECL,   // rune name(params) { body }
+    NODE_CONST_DECL,  // const NAME: type = value;
 } NodeKind;
 
 // ---- Param ----
@@ -285,6 +286,13 @@ struct AstNode {
             Token *body_tokens;
             int body_token_count;
         } rune_decl;
+
+        // NODE_CONST_DECL
+        struct {
+            char *name;
+            AstType *type;
+            AstNode *value;
+        } const_decl;
     } as;
 
     // Filled by semantic analysis
