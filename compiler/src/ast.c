@@ -279,6 +279,12 @@ void ast_print(AstNode *node, int ind) {
         ast_print(node->as.while_stmt.body, ind + 1);
         break;
 
+    case NODE_DO_WHILE_STMT:
+        printf("DoWhile\n");
+        ast_print(node->as.do_while_stmt.body, ind + 1);
+        ast_print(node->as.do_while_stmt.condition, ind + 1);
+        break;
+
     case NODE_FOR_STMT:
         if (node->as.for_stmt.is_foreach) {
             printf("ForEach '%s'\n", node->as.for_stmt.var_name);
@@ -528,6 +534,10 @@ void ast_free(AstNode *node) {
     case NODE_WHILE_STMT:
         ast_free(node->as.while_stmt.condition);
         ast_free(node->as.while_stmt.body);
+        break;
+    case NODE_DO_WHILE_STMT:
+        ast_free(node->as.do_while_stmt.body);
+        ast_free(node->as.do_while_stmt.condition);
         break;
     case NODE_FOR_STMT:
         free(node->as.for_stmt.var_name);

@@ -630,6 +630,17 @@ static void check_stmt(SemaCtx *ctx, AstNode *node) {
         break;
     }
 
+    case NODE_DO_WHILE_STMT: {
+        ctx->loop_depth++;
+        check_block(ctx, node->as.do_while_stmt.body);
+        ctx->loop_depth--;
+        AstType *cond = check_expr(ctx, node->as.do_while_stmt.condition);
+        if (cond && cond->kind != TYPE_BOOL) {
+            sema_error(ctx, &node->as.do_while_stmt.condition->tok, "do..while condition must be bool, got '%s'", ast_type_str(cond));
+        }
+        break;
+    }
+
     case NODE_FOR_STMT: {
         if (node->as.for_stmt.is_foreach) {
             // For-each over array

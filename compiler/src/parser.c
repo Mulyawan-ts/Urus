@@ -897,6 +897,18 @@ static AstNode *parse_while(Parser *p) {
     return n;
 }
 
+static AstNode *parse_do_while(Parser *p) {
+    Token do_tok = expect(p, TOK_DO, "expected 'do'");
+    AstNode *body = parse_block(p);
+    expect(p, TOK_WHILE, "expected 'while' after do block");
+    AstNode *cond = parse_expr(p);
+    expect(p, TOK_SEMICOLON, "expected ';' after do..while condition");
+    AstNode *n = ast_new(NODE_DO_WHILE_STMT, do_tok);
+    n->as.do_while_stmt.body = body;
+    n->as.do_while_stmt.condition = cond;
+    return n;
+}
+
 static AstNode *parse_for(Parser *p) {
     Token for_tok = expect(p, TOK_FOR, "expected 'for'");
 
@@ -1044,6 +1056,7 @@ static AstNode *parse_statement(Parser *p) {
     if (check(p, TOK_LET)) return parse_let(p);
     if (check(p, TOK_IF)) return parse_if(p);
     if (check(p, TOK_WHILE)) return parse_while(p);
+    if (check(p, TOK_DO)) return parse_do_while(p);
     if (check(p, TOK_FOR)) return parse_for(p);
     if (check(p, TOK_MATCH)) return parse_match(p);
     if (check(p, TOK_RETURN)) return parse_return(p);

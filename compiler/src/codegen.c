@@ -145,6 +145,10 @@ static void collect_and_emit_tuple_typedefs(CodeBuf *buf, AstNode *node) {
         collect_and_emit_tuple_typedefs(buf, node->as.while_stmt.condition);
         collect_and_emit_tuple_typedefs(buf, node->as.while_stmt.body);
         break;
+    case NODE_DO_WHILE_STMT:
+        collect_and_emit_tuple_typedefs(buf, node->as.do_while_stmt.body);
+        collect_and_emit_tuple_typedefs(buf, node->as.do_while_stmt.condition);
+        break;
     case NODE_FOR_STMT:
         collect_and_emit_tuple_typedefs(buf, node->as.for_stmt.start);
         collect_and_emit_tuple_typedefs(buf, node->as.for_stmt.end);
@@ -967,6 +971,14 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
         emit(buf, ") ");
         gen_block(buf, node->as.while_stmt.body);
         emit(buf, "\n");
+        break;
+    case NODE_DO_WHILE_STMT:
+        emit_indent(buf);
+        emit(buf, "do ");
+        gen_block(buf, node->as.do_while_stmt.body);
+        emit(buf, " while (");
+        gen_expr(buf, node->as.do_while_stmt.condition);
+        emit(buf, ");\n");
         break;
     case NODE_FOR_STMT:
         if (node->as.for_stmt.is_foreach) {

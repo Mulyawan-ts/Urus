@@ -31,6 +31,7 @@ typedef enum {
     TOK_IMPORT,
     TOK_RUNE,
     TOK_CONST,
+    TOK_DO,
 
     // Type keywords
     TOK_INT,

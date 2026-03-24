@@ -52,6 +52,7 @@ typedef enum {
     NODE_ASSIGN_STMT,
     NODE_IF_STMT,
     NODE_WHILE_STMT,
+    NODE_DO_WHILE_STMT,
     NODE_FOR_STMT,
     NODE_RETURN_STMT,
     NODE_BREAK_STMT,
@@ -177,6 +178,9 @@ struct AstNode {
 
         // NODE_WHILE_STMT
         struct { AstNode *condition; AstNode *body; } while_stmt;
+
+        // NODE_DO_WHILE_STMT
+        struct { AstNode *body; AstNode *condition; } do_while_stmt;
 
         // NODE_FOR_STMT
         struct {

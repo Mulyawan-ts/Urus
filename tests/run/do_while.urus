@@ -1,0 +1,25 @@
+fn main(): void {
+    // Basic do..while
+    let mut i: int = 0;
+    do {
+        print(to_str(i));
+        i += 1;
+    } while i < 5;
+
+    // Body always runs at least once
+    let mut ran: bool = false;
+    do {
+        ran = true;
+    } while false;
+    print(to_str(ran));
+
+    // With break
+    let mut count: int = 0;
+    do {
+        if count == 3 {
+            break;
+        }
+        count += 1;
+    } while true;
+    print(to_str(count));
+}
