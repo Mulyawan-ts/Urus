@@ -1160,6 +1160,7 @@ static AstNode *parse_fn_decl(Parser *p) {
             params[count].name = tok_str(pname);
             params[count].type = ptype;
             params[count].is_mut = param_mut;
+            params[count].tok = pname;
 
             // parse default parameter value
             if (match(p, TOK_ASSIGN)) {

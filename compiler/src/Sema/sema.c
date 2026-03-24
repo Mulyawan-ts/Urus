@@ -13,6 +13,9 @@
 // ---- Reporting system ----
 
 static void sema_error(SemaCtx *ctx, Token *t, const char *fmt, ...) {
+    if (ctx->current_fn_name[0]) {
+        report(ctx->filename, "in function \033[1m'%s'\033[0m:", ctx->current_fn_name);
+    }
     char msg[1024];
 
     va_list args;
@@ -25,6 +28,9 @@ static void sema_error(SemaCtx *ctx, Token *t, const char *fmt, ...) {
 }
 
 static void sema_warn(SemaCtx *ctx, Token *t, const char *fmt, ...) {
+    if (ctx->current_fn_name[0]) {
+        report(ctx->filename, "in function \033[1m'%s'\033[0m:", ctx->current_fn_name);
+    }
     char msg[1024];
 
     va_list args;
@@ -853,14 +859,13 @@ static void check_stmt(SemaCtx *ctx, AstNode *node) {
 static void check_unused_symbols(SemaCtx *ctx, SemaScope *s) {
     for (int i = 0; i < s->count; i++) {
         SemaSymbol *sym = &s->syms[i];
-        if (sym->name[0] != '_' && strcmp(sym->name, "main") != 0 && !sym->is_builtin &&
-                !sym->is_referenced) {
+        if (!sym->is_imported && sym->name[0] != '_' && strcmp(sym->name, "main") != 0 &&
+                !sym->is_builtin && !sym->is_referenced) {
             char *type = "variable";
             if (sym->is_fn) type = "function";
             else if (sym->is_struct) type = "struct";
             else if (sym->is_enum) type = "enum";
 
-            if (type[0] != 'v') report(ctx->filename, "In %s '%s':", type, sym->name);
             sema_warn(ctx, &sym->tok, "unused %s '%s'", type, sym->name);
         }
     }
@@ -897,6 +902,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
             }
             SemaSymbol *s = scope_add(global, d->as.struct_decl.name, d->tok);
             s->is_struct = true;
+            s->is_imported = d->is_imported;
             s->fields = d->as.struct_decl.fields;
             s->field_count = d->as.struct_decl.field_count;
             s->type = ast_type_named(d->as.struct_decl.name);
@@ -907,6 +913,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
             }
             SemaSymbol *s = scope_add(global, d->as.enum_decl.name, d->tok);
             s->is_enum = true;
+            s->is_imported = d->is_imported;
             s->variants = d->as.enum_decl.variants;
             s->variant_count = d->as.enum_decl.variant_count;
             s->type = ast_type_named(d->as.enum_decl.name);
@@ -923,6 +930,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
             }
             SemaSymbol *s = scope_add(global, d->as.fn_decl.name, d->tok);
             s->is_fn = true;
+            s->is_imported = d->is_imported;
             s->params = d->as.fn_decl.params;
             s->param_count = d->as.fn_decl.param_count;
             s->return_type = d->as.fn_decl.return_type;
@@ -944,6 +952,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
             SemaSymbol *s = scope_add(global, d->as.const_decl.name, d->tok);
             s->type = d->as.const_decl.type;
             s->is_mut = false;
+            s->is_imported = d->is_imported;
             s->is_referenced = true; // don't warn unused for constants
         } else if (d->kind == NODE_TYPE_ALIAS) {
             if (scope_lookup_local(global, d->as.type_alias.name)) {
@@ -952,6 +961,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
             }
             SemaSymbol *s = scope_add(global, d->as.type_alias.name, d->tok);
             s->is_type_alias = true;
+            s->is_imported = d->is_imported;
             s->alias_type = d->as.type_alias.type;
             s->type = d->as.type_alias.type;
             s->is_referenced = true;
@@ -977,6 +987,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
         if (d->kind == NODE_FN_DECL) {
             SemaScope *fn_scope = scope_new(global);
             ctx.current = fn_scope;
+            ctx.current_fn_name = d->as.fn_decl.name;
 
             // Resolve type aliases in return type and params
             d->as.fn_decl.return_type = sema_resolve_type(&ctx, d->as.fn_decl.return_type);
@@ -987,7 +998,8 @@ bool sema_analyze(AstNode *program, const char *filename) {
 
             for (int j = 0; j < d->as.fn_decl.param_count; j++) {
                 Param *p_decl = &d->as.fn_decl.params[j];
-                SemaSymbol *p = scope_add(fn_scope, d->as.fn_decl.params[j].name, d->tok);
+                SemaSymbol *p = scope_add(fn_scope, d->as.fn_decl.params[j].name, p_decl->tok);
+                p->is_imported = d->is_imported;
                 p->type = d->as.fn_decl.params[j].type;
                 p->is_mut = p_decl->is_mut;
 
@@ -1008,6 +1020,7 @@ bool sema_analyze(AstNode *program, const char *filename) {
             check_unused_symbols(&ctx, fn_scope);
             ctx.current = global;
             scope_free(fn_scope);
+            ctx.current_fn_name = "";
         }
     }
 

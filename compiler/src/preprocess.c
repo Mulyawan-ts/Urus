@@ -178,6 +178,7 @@ bool preprocess_imports(AstNode *program, const char *base_file) {
         // Insert imported declarations (skip imports from imported file)
         for (int j = 0; j < imported->as.program.decl_count; j++) {
             if (imported->as.program.decls[j]->kind != NODE_IMPORT) {
+                imported->as.program.decls[j]->is_imported = true;
                 new_decls[pos++] = imported->as.program.decls[j];
                 imported->as.program.decls[j] = NULL; // transfer ownership
             }

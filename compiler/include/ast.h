@@ -91,6 +91,7 @@ typedef struct {
     AstType *type;
     AstNode *default_value;
     bool is_mut;
+    Token tok;
 } Param;
 
 // ---- Struct field init ----
@@ -314,6 +315,7 @@ struct AstNode {
     AstType *resolved_type;
 
     // Parser flags
+    bool is_imported; // prevent unused warning
     bool parenthesized; // wrapped in redundant ()
 
     // Filled by codegen (temp variable ID)
