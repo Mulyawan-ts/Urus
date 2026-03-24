@@ -1,0 +1,19 @@
+fn main(): void {
+    let mut nums: [int] = [10, 20, 30];
+
+    print(to_str(nums.len()));
+
+    nums.push(40);
+    nums.push(50);
+    print(to_str(nums.len()));
+
+    nums.pop();
+    print(to_str(nums.len()));
+
+    // Mix with traditional syntax
+    print(to_str(len(nums)));
+
+    for n in nums {
+        print(to_str(n));
+    }
+}
