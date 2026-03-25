@@ -59,6 +59,7 @@ typedef enum {
     NODE_BREAK_STMT,
     NODE_CONTINUE_STMT,
     NODE_EXPR_STMT,
+    NODE_DEFER_STMT,
     NODE_MATCH,
 
     // Expressions
@@ -200,6 +201,9 @@ struct AstNode {
 
         // NODE_RETURN_STMT
         struct { AstNode *value; /* NULL if void */ } return_stmt;
+
+        // NODE_DEFER_STMT
+        struct { AstNode *body; } defer_stmt;
 
         // NODE_EXPR_STMT
         struct { AstNode *expr; } expr_stmt;

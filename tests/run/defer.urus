@@ -1,0 +1,19 @@
+fn test_basic(): void {
+    print("start");
+    defer { print("deferred 1"); }
+    defer { print("deferred 2"); }
+    print("middle");
+    print("end");
+}
+
+fn test_return(): int {
+    defer { print("cleanup before return"); }
+    print("working");
+    return 42;
+}
+
+fn main(): void {
+    test_basic();
+    let r: int = test_return();
+    print(to_str(r));
+}

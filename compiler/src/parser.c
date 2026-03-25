@@ -1068,6 +1068,13 @@ static AstNode *parse_statement(Parser *p) {
         expect(p, TOK_SEMICOLON, "expected ';' after continue");
         return ast_new(NODE_CONTINUE_STMT, previous(p));
     }
+    if (check(p, TOK_DEFER)) {
+        Token t = advance_tok(p);
+        AstNode *body = parse_block(p);
+        AstNode *n = ast_new(NODE_DEFER_STMT, t);
+        n->as.defer_stmt.body = body;
+        return n;
+    }
 
     // Prefix increment/decrement: ++x; or --x;
     if (check(p, TOK_PLUSPLUS) || check(p, TOK_MINUSMINUS)) {
