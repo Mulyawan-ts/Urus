@@ -36,6 +36,10 @@ static const char *tuple_type_name(AstType *t) {
     static char buf[512];
     int pos = snprintf(buf, sizeof(buf), "_urus_tuple");
     for (int i = 0; i < t->element_count; i++) {
+        if (pos >= (int)sizeof(buf) - 1) {
+            fprintf(stderr, "Error: tuple type name too long (exceeds %d bytes)\n", (int)sizeof(buf));
+            exit(1);
+        }
         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "_%s", ast_type_str(t->element_types[i]));
     }
     // Sanitize: replace non-alnum with _

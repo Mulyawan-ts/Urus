@@ -142,6 +142,11 @@ static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
 
     // Use signed arithmetic to avoid unsigned underflow
     ptrdiff_t diff = (ptrdiff_t)new_s->len - (ptrdiff_t)old->len;
+    // Overflow check: ensure count * diff doesn't overflow
+    if (diff > 0 && count > (ptrdiff_t)((SIZE_MAX - s->len) / (size_t)diff)) {
+        fprintf(stderr, "Error: string replace result too large\n");
+        exit(1);
+    }
     size_t new_len = (size_t)((ptrdiff_t)s->len + count * diff);
     urus_str *r = (urus_str *)urus_alloc(sizeof(urus_str) + new_len + 1);
     r->len = new_len;
@@ -155,7 +160,9 @@ static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
         memcpy(dst, new_s->data, new_s->len); dst += new_s->len;
         p = q + old->len;
     }
-    strcpy(dst, p);
+    size_t remaining = strlen(p);
+    memcpy(dst, p, remaining);
+    dst[remaining] = '\0';
     return r;
 }
 

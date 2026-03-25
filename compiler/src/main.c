@@ -17,6 +17,7 @@
 #else
 #  include <unistd.h>
 #  include <limits.h>
+#  include <sys/wait.h>
 #endif
 
 #include "config.h"
@@ -205,7 +206,14 @@ int main(int argc, char **argv) {
     if (emit_c) {
         printf("%s", cbuf.data);
     } else {
-        const char *c_path = "_urus_tmp.c";
+        // Generate unique temp filename to prevent TOCTOU race conditions
+        char c_path_buf[256];
+#ifdef _WIN32
+        snprintf(c_path_buf, sizeof(c_path_buf), "_urus_tmp_%d.c", (int)GetCurrentProcessId());
+#else
+        snprintf(c_path_buf, sizeof(c_path_buf), "_urus_tmp_%d.c", (int)getpid());
+#endif
+        const char *c_path = c_path_buf;
 #ifdef _WIN32
         const char *default_out = run_after ? "_urus_run.exe" : "a.exe";
 #else
@@ -262,13 +270,21 @@ int main(int argc, char **argv) {
                                "-o", out_path,
                                c_path, "-lm", NULL);
 #else
-        // Runtime header is embedded in generated C, no -I needed
-        char cmd[8192];
-        snprintf(cmd, sizeof(cmd),
-                 "%s -std=c11 -O2 -o \"%s\" \"%s\" -lm",
-                 gcc_path, out_path, c_path);
-        printf("Compiling: %s\n", cmd);
-        int ret = system(cmd);
+        // Use fork/execvp to avoid shell injection via system()
+        printf("Compiling: %s -std=c11 -O2 -o %s %s -lm\n", gcc_path, out_path, c_path);
+        int ret;
+        pid_t pid = fork();
+        if (pid == 0) {
+            execlp(gcc_path, "gcc", "-std=c11", "-O2",
+                   "-o", out_path, c_path, "-lm", (char *)NULL);
+            _exit(127); // exec failed
+        } else if (pid < 0) {
+            ret = -1;
+        } else {
+            int status;
+            waitpid(pid, &status, 0);
+            ret = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+        }
 #endif
 
         remove(c_path);
