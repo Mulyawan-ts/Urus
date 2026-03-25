@@ -5,7 +5,7 @@ set(PROJECT_VERSION_TAGS "")
 set(CMAKE_C_STANDARD 11) # -std=c11
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-configure_file(config.h.in config.h)
+configure_file(include/config.h.in config.h)
 
 if(MSVC)
     add_compile_options(/W4)
@@ -14,7 +14,7 @@ else()
     add_compile_options(-Wall -Wextra -g)
 endif()
 
-set(URUS_RUNTIME_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/urus_runtime.h")
+set(URUS_RUNTIME_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/runtime/urus_runtime.h")
 set(URUS_RUNTIME_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/urus_runtime.c")
 
 add_custom_command(
@@ -52,4 +52,22 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(urusc PRIVATE m)
 endif()
 
+# _._. Install urusc ._._
 install(TARGETS urusc DESTINATION bin)
+
+# _._. Install stdlib/* to local lib ._._
+if(WIN32)
+    # Windows: Program Files\Urusc\lib
+    # Path separator already handled by CMake
+    set(URUS_LIB_DIR "Program Files/Urusc/lib")
+elseif(DEFINED ENV{PREFIX})
+    # Termux sets $PREFIX; honour it.
+    set(URUS_LIB_DIR "$ENV{PREFIX}/lib/urusc")
+else()
+    # Linux/Unix: /usr/local/lib/urusc
+    set(URUS_LIB_DIR "/usr/local/lib/urusc")
+endif()
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/stdlib/"
+        DESTINATION "${URUS_LIB_DIR}"
+        FILES_MATCHING PATTERN "*.urus")

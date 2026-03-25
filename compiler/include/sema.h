@@ -11,7 +11,8 @@ typedef struct {
     bool is_mut;
     bool is_fn;
     bool is_referenced;
-    bool is_builtin; // To avoid making warning on builtin function/variable
+    bool is_imported; // prevent unused warning on imported decl
+    bool is_builtin; // prevent unused warning on builtin function/variable
     Param *params;
     int param_count;
     AstType *return_type;
@@ -34,6 +35,7 @@ typedef struct Scope {
 typedef struct {
     SemaScope *current;
     AstType *current_fn_return;
+    const char *current_fn_name; // in function '...' tracking
     const char *filename;
     int errors;
     int loop_depth;

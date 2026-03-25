@@ -66,6 +66,9 @@ static char *tok_str(Token t) {
 }
 
 static char *tok_str_value(Token t) {
+    if (t.length >= 6 && strncmp(t.start, "\"\"\"", 3) == 0) {
+        return ast_strdup(t.start + 3, t.length - 6);
+    }
     return ast_strdup(t.start + 1, t.length - 2);
 }
 
@@ -1052,6 +1055,19 @@ static AstNode *parse_match(Parser *p) {
     return n;
 }
 
+static AstNode *parse_emit(Parser *p, bool is_toplevel) {
+    Token emit_tok = expect(p, TOK_EMIT, "expected __emit__");
+    expect(p, TOK_LPAREN, "expected '('");
+    Token str_tok = expect(p, TOK_STR_LIT, "expected string literal after __emit__");
+    expect(p, TOK_RPAREN, "expected ')'");
+    expect(p, TOK_SEMICOLON, "expected ';' after __emit__");
+
+    AstNode *n = ast_new(NODE_EMIT_STMT, emit_tok);
+    n->as.emit_stmt.content = tok_str_value(str_tok);
+    n->as.emit_stmt.is_toplevel = is_toplevel;
+    return n;
+}
+
 static AstNode *parse_statement(Parser *p) {
     if (check(p, TOK_LET)) return parse_let(p);
     if (check(p, TOK_IF)) return parse_if(p);
@@ -1059,6 +1075,7 @@ static AstNode *parse_statement(Parser *p) {
     if (check(p, TOK_DO)) return parse_do_while(p);
     if (check(p, TOK_FOR)) return parse_for(p);
     if (check(p, TOK_MATCH)) return parse_match(p);
+    if (check(p, TOK_EMIT)) return parse_emit(p, false);
     if (check(p, TOK_RETURN)) return parse_return(p);
     if (match(p, TOK_BREAK)) {
         expect(p, TOK_SEMICOLON, "expected ';' after break");
@@ -1150,6 +1167,7 @@ static AstNode *parse_fn_decl(Parser *p) {
             params[count].name = tok_str(pname);
             params[count].type = ptype;
             params[count].is_mut = param_mut;
+            params[count].tok = pname;
 
             // parse default parameter value
             if (match(p, TOK_ASSIGN)) {
@@ -1276,10 +1294,23 @@ static AstNode *parse_enum_decl(Parser *p) {
 
 static AstNode *parse_import(Parser *p) {
     Token import_tok = expect(p, TOK_IMPORT, "expected 'import'");
-    Token path = expect(p, TOK_STR_LIT, "expected module path string");
-    expect(p, TOK_SEMICOLON, "expected ';' after import");
     AstNode *n = ast_new(NODE_IMPORT, import_tok);
-    n->as.import_decl.path = tok_str_value(path);
+
+    if (check(p, TOK_STR_LIT)) {
+        // import "relative/path.urus"
+        Token path = advance_tok(p);
+        n->as.import_decl.path = tok_str_value(path);
+        n->as.import_decl.is_stdlib = false;
+    } else if (check(p, TOK_IDENT)) {
+        // import module_name
+        Token module_name = advance_tok(p);
+        n->as.import_decl.path = tok_str(module_name); // store raw name (e.g "math")
+        n->as.import_decl.is_stdlib = true;
+    } else {
+        error_at(p, current(p), "expected \"FILENAME\" or MODULE_NAME after import");
+    }
+
+    expect(p, TOK_SEMICOLON, "expected ';' after import");
     return n;
 }
 
@@ -1387,6 +1418,7 @@ static AstNode *parse_declaration(Parser *p) {
     if (check(p, TOK_RUNE)) return parse_rune_decl(p);
     if (check(p, TOK_CONST)) return parse_const_decl(p);
     if (check(p, TOK_TYPE)) return parse_type_alias(p);
+    if (check(p, TOK_EMIT)) return parse_emit(p,true);
     return parse_statement(p);
 }
 

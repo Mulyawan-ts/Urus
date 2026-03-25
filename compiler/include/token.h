@@ -34,6 +34,7 @@ typedef enum {
     TOK_DO,
     TOK_TYPE,
     TOK_DEFER,
+    TOK_EMIT,
 
     // Type keywords
     TOK_INT,

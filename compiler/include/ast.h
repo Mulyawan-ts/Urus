@@ -60,6 +60,7 @@ typedef enum {
     NODE_CONTINUE_STMT,
     NODE_EXPR_STMT,
     NODE_DEFER_STMT,
+    NODE_EMIT_STMT,
     NODE_MATCH,
 
     // Expressions
@@ -91,6 +92,7 @@ typedef struct {
     AstType *type;
     AstNode *default_value;
     bool is_mut;
+    Token tok;
 } Param;
 
 // ---- Struct field init ----
@@ -208,6 +210,9 @@ struct AstNode {
         // NODE_EXPR_STMT
         struct { AstNode *expr; } expr_stmt;
 
+        // NODE_EMIT_STMT
+        struct { char *content; bool is_toplevel; } emit_stmt;
+
         // NODE_BINARY
         struct { AstNode *left; TokenType op; AstNode *right; } binary;
 
@@ -267,7 +272,7 @@ struct AstNode {
         } enum_init;
 
         // NODE_IMPORT
-        struct { char *path; } import_decl;
+        struct { char *path; bool is_stdlib; } import_decl;
 
         // NODE_OK_EXPR / NODE_ERR_EXPR
         struct { AstNode *value; } result_expr;
@@ -314,6 +319,7 @@ struct AstNode {
     AstType *resolved_type;
 
     // Parser flags
+    bool is_imported; // prevent unused warning
     bool parenthesized; // wrapped in redundant ()
 
     // Filled by codegen (temp variable ID)
