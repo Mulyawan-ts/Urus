@@ -33,6 +33,7 @@ typedef enum {
     TOK_CONST,
     TOK_DO,
     TOK_TYPE,
+    TOK_DEFER,
     TOK_EMIT,
 
     // Type keywords

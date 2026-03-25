@@ -92,6 +92,7 @@ static TokenType check_keyword(const char *start, size_t len) {
         {"do",       2, TOK_DO},
         {"__emit__", 8, TOK_EMIT},
         {"type",     4, TOK_TYPE},
+        {"defer",    5, TOK_DEFER},
         {"int",      3, TOK_INT},
         {"float",    5, TOK_FLOAT},
         {"bool",     4, TOK_BOOL},
@@ -384,6 +385,7 @@ const char *token_type_name(TokenType type) {
     case TOK_CONST: return "CONST";
     case TOK_DO: return "DO";
     case TOK_TYPE: return "TYPE";
+    case TOK_DEFER: return "DEFER";
     case TOK_ARROW: return "ARROW";
     case TOK_INT: return "INT";
     case TOK_FLOAT: return "FLOAT";

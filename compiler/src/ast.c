@@ -464,6 +464,10 @@ void ast_print(AstNode *node, int ind) {
     case NODE_TYPE_ALIAS:
         printf("TypeAlias '%s'\n", node->as.type_alias.name);
         break;
+    case NODE_DEFER_STMT:
+        printf("Defer\n");
+        ast_print(node->as.defer_stmt.body, ind + 1);
+        break;
     }
 }
 
@@ -688,6 +692,9 @@ void ast_free(AstNode *node) {
     case NODE_TYPE_ALIAS:
         free(node->as.type_alias.name);
         ast_type_free(node->as.type_alias.type);
+        break;
+    case NODE_DEFER_STMT:
+        ast_free(node->as.defer_stmt.body);
         break;
     case NODE_INT_LIT:
     case NODE_FLOAT_LIT:

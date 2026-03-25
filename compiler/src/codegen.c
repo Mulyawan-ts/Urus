@@ -17,6 +17,17 @@ static void gen_type(CodeBuf *buf, AstType *t);
 static void emit(CodeBuf *buf, const char *fmt, ...);
 static void emit_indent(CodeBuf *buf);
 
+// ---- Defer tracking ----
+static AstNode *defer_stack[64];
+static int defer_count = 0;
+
+static void emit_defers(CodeBuf *buf) {
+    for (int i = defer_count - 1; i >= 0; i--) {
+        gen_block(buf, defer_stack[i]);
+        emit(buf, "\n");
+    }
+}
+
 // ---- Tuple typedef tracking ----
 static bool tuple_needs_drop(AstType *t);
 static bool type_needs_rc(AstType *t);
@@ -1066,16 +1077,22 @@ static void gen_stmt(CodeBuf *buf, AstNode *node) {
             emit(buf, ";\n");
 
             if (type_needs_rc(t) && node->as.return_stmt.value->kind == NODE_IDENT) {
-                // the identifier must be set to NULL to prevent destructed from URUS_RAII()
                 emit_indent(buf);
                 emit(buf, "%s = NULL; // move to _urus_ret_%d\n", node->as.return_stmt.value->as.ident.name, tmp);
             }
 
+            emit_defers(buf);
             emit_indent(buf);
             emit(buf, "return _urus_ret_%d;\n", tmp);
         } else {
+            emit_defers(buf);
             emit_indent(buf);
             emit(buf, "return;\n");
+        }
+        break;
+    case NODE_DEFER_STMT:
+        if (defer_count < 64) {
+            defer_stack[defer_count++] = node->as.defer_stmt.body;
         }
         break;
     case NODE_BREAK_STMT:
@@ -1225,8 +1242,27 @@ static void gen_fn_decl(CodeBuf *buf, AstNode *node) {
         }
     }
     emit(buf, ") ");
-    gen_block(buf, node->as.fn_decl.body);
-    emit(buf, "\n\n");
+
+    // Reset defer stack for this function
+    int saved_defer_count = defer_count;
+    defer_count = 0;
+
+    // Emit function body with defers at end for void functions
+    AstNode *body = node->as.fn_decl.body;
+    emit(buf, "{\n");
+    buf->indent++;
+    for (int i = 0; i < body->as.block.stmt_count; i++) {
+        gen_stmt(buf, body->as.block.stmts[i]);
+    }
+    if (defer_count > 0 && node->as.fn_decl.return_type &&
+        node->as.fn_decl.return_type->kind == TYPE_VOID) {
+        emit_defers(buf);
+    }
+    buf->indent--;
+    emit_indent(buf);
+    emit(buf, "}\n\n");
+
+    defer_count = saved_defer_count;
 }
 
 // ---- Program ----

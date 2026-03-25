@@ -1,0 +1,8 @@
+start
+middle
+end
+deferred 2
+deferred 1
+working
+cleanup before return
+42
