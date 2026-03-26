@@ -79,7 +79,7 @@ cmake --install build
 
 ### Hello World
 
-```urus
+```rust
 fn main(): void {
     print("Hello, World!");
 }
@@ -91,6 +91,7 @@ urusc hello.urus -o hello
 # Hello, World!
 ```
 
+> [!TIP]
 > Having trouble? Open an issue on the [issue tracker](https://github.com/Urus-Foundation/Urus/issues/new?template=complaint.md).
 
 ---
@@ -112,7 +113,7 @@ urusc hello.urus -o hello
 
 ### Variables
 
-```urus
+```rust
 let x: int = 10;           // immutable
 let mut count: int = 0;    // mutable
 count += 1;
@@ -124,7 +125,7 @@ let pi = 3.14;             // inferred as float
 
 ### Constants
 
-```urus
+```rust
 const MAX_SIZE: int = 100;
 const PI: float = 3.14159;
 const APP_NAME: str = "MyApp";
@@ -132,7 +133,7 @@ const APP_NAME: str = "MyApp";
 
 ### Type Aliases
 
-```urus
+```rust
 type ID = int;
 type Name = str;
 type Numbers = [int];
@@ -144,7 +145,7 @@ fn greet(id: ID, name: Name): void {
 
 ### Functions
 
-```urus
+```rust
 fn add(a: int, b: int): int {
     return a + b;
 }
@@ -163,7 +164,7 @@ fn increment(mut x: int): int {
 
 ### Tuples
 
-```urus
+```rust
 let t: (int, str) = (42, "hello");
 print(t.0);    // 42
 print(t.1);    // hello
@@ -180,7 +181,7 @@ for (k, v) in pairs {
 
 ### Runes (Macros)
 
-```urus
+```rust
 rune square(x) { x * x }
 rune max(a, b) { if a > b { a } else { b } }
 
@@ -192,14 +193,14 @@ fn main(): void {
 
 ### If-Expressions
 
-```urus
+```rust
 let label = if x > 5 { "big" } else { "small" };
 print(if x > 0 { "positive" } else { "negative" });
 ```
 
 ### Control Flow
 
-```urus
+```rust
 // If / Else
 if x > 10 {
     print("big");
@@ -238,7 +239,7 @@ for name in names {
 
 ### Structs
 
-```urus
+```rust
 struct Point {
     x: float;
     y: float;
@@ -253,7 +254,7 @@ fn distance(a: Point, b: Point): float {
 
 ### Enums and Pattern Matching
 
-```urus
+```rust
 enum Shape {
     Circle(r: float);
     Rect(w: float, h: float);
@@ -278,7 +279,7 @@ fn area(s: Shape): float {
 
 Match also works with primitive types:
 
-```urus
+```rust
 fn describe(n: int): void {
     match n {
         0 => { print("zero"); }
@@ -298,7 +299,7 @@ fn greet(lang: str): void {
 
 ### Defer
 
-```urus
+```rust
 fn process(): void {
     print("start");
     defer { print("cleanup"); }
@@ -311,7 +312,7 @@ Defer bodies execute in LIFO order and run before every return path.
 
 ### String Interpolation
 
-```urus
+```rust
 let name: str = "World";
 let count: int = 42;
 print(f"Hello {name}! Answer: {count}");
@@ -319,7 +320,7 @@ print(f"Hello {name}! Answer: {count}");
 
 ### Arrays
 
-```urus
+```rust
 let nums: [int] = [1, 2, 3, 4, 5];
 let first: int = nums[0];
 
@@ -334,7 +335,7 @@ print(items.len());
 
 ### String Methods
 
-```urus
+```rust
 let s: str = "  Hello World  ";
 print(s.trim());            // "Hello World"
 print(s.upper());           // "  HELLO WORLD  "
@@ -345,7 +346,7 @@ print(s.len());             // 15
 
 ### Modules
 
-```urus
+```rust
 // math_utils.urus
 fn square(x: int): int {
     return x * x;
@@ -361,7 +362,7 @@ fn main(): void {
 
 ### Error Handling
 
-```urus
+```rust
 fn divide(a: int, b: int): Result<int, str> {
     if b == 0 {
         return Err("division by zero");
@@ -687,6 +688,12 @@ We welcome contributions of all kinds. See [CONTRIBUTING.md](./CONTRIBUTING.md) 
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full text.
+
+---
+
+## Join Our Community
+
+Have questions? Found a bug? Want to contribute? [Join Our Whatsapp](https://chat.whatsapp.com/GYq9gBzXogU6U4JmiqV2dm?mode=gi_t)
 
 ---
 
