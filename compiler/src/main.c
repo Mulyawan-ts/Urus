@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
         snprintf(cmd, sizeof(cmd),
                  "\"%s\" -std=c11 -O2 -o \"%s\" \"%s\" -lm",
                  gcc_path, out_path, c_path);
-        printf("Compiling: %s\n", cmd);
+        fprintf(stderr, "Compiling: %s\n", cmd);
 
         // Use _spawnl for reliable execution on Windows
         int ret = (int)_spawnl(_P_WAIT, gcc_path, "gcc",
@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
                                c_path, "-lm", NULL);
 #else
         // Use fork/execvp to avoid shell injection via system()
-        printf("Compiling: %s -std=c11 -O2 -o %s %s -lm\n", gcc_path, out_path, c_path);
+        fprintf(stderr, "Compiling: %s -std=c11 -O2 -o %s %s -lm\n", gcc_path, out_path, c_path);
         int ret;
         pid_t pid = fork();
         if (pid == 0) {
