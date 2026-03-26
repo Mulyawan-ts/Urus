@@ -720,6 +720,7 @@ Have questions? Found a bug? Want to contribute? [Join Our Whatsapp](https://cha
     <td align="center"><a href="https://github.com/XBotzLauncher"><img src="https://github.com/XBotzLauncher.png" width="80" /><br /><sub><b>XBotzLauncher</b></sub></a></td>
     <td align="center"><a href="https://github.com/aimardcr"><img src="https://github.com/aimardcr.png" width="80" /><br /><sub><b>aimardcr</b></sub></a></td>
     <td align="center"><a href="https://github.com/billalxcode"><img src="https://github.com/billalxcode.png" width="80" /><br /><sub><b>billalxcode</b></sub></a></td>
+    <td align="center"><a href="https://github.com/devirtz"><img src="https://github.com/devirtz.png" width="80" /><br /><sub><b>devirtz</b></sub></a></td>
   </tr>
 </table>
 
