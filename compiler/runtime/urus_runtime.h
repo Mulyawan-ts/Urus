@@ -23,34 +23,40 @@
 #define URUS_RUNTIME_H
 
 #ifndef _WIN32
-#  define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200809L
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include <ctype.h>
 #include <inttypes.h>
 #include <math.h>
-#include <ctype.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // ============================================================
 // RAII
 // ============================================================
 
 #if defined(__clang__) || defined(__GNUC__)
-    #define URUS_RAII(dtor) __attribute__((cleanup(dtor)))
+#define URUS_RAII(dtor) __attribute__((cleanup(dtor)))
 #else
-    #define URUS_RAII(dtor)
-    #warning "__attribute(()) is not supported in your compiler. RAII is not gonna work."
+#define URUS_RAII(dtor)
+#warning \
+    "__attribute(()) is not supported in your compiler. RAII is not gonna work."
 #endif
 
-#define URUS_MOVE(type, dest, src) do { dest = src; src = NULL; } while(0) // move semantic
-typedef void (*urus_drop_fn)(void*);
+#define URUS_MOVE(type, dest, src) \
+    do {                           \
+        dest = src;                \
+        src = NULL;                \
+    } while (0) // move semantic
+typedef void (*urus_drop_fn)(void *);
 
-static void *urus_alloc(size_t size) {
+static void *urus_alloc(size_t size)
+{
     void *ptr = malloc(size);
     if (!ptr) {
         fprintf(stderr, "Error: memory allocation failed (size=%zu)\n", size);
@@ -59,7 +65,8 @@ static void *urus_alloc(size_t size) {
     return ptr;
 }
 
-static void *urus_realloc(void *ptr, size_t size) {
+static void *urus_realloc(void *ptr, size_t size)
+{
     void *new_ptr = realloc(ptr, size);
     if (!new_ptr) {
         fprintf(stderr, "Error: memory reallocation failed (size=%zu)\n", size);
@@ -77,7 +84,8 @@ typedef struct {
     char data[];
 } urus_str;
 
-static urus_str *urus_str_new(const char *s, size_t len) {
+static urus_str *urus_str_new(const char *s, size_t len)
+{
     urus_str *str = (urus_str *)urus_alloc(sizeof(urus_str) + len + 1);
     str->len = len;
     memcpy(str->data, s, len);
@@ -85,25 +93,32 @@ static urus_str *urus_str_new(const char *s, size_t len) {
     return str;
 }
 
-static void urus_str_drop(urus_str **sp) {
+static void urus_str_drop(urus_str **sp)
+{
     if (sp && *sp) {
         free(*sp);
         *sp = NULL;
     }
 }
 
-static bool urus_str_equal(urus_str *a, urus_str *b) {
-    if (a == b) return true; // compare address
-    if (a->data== b->data) return true; // compare address
-    if (a->len != b->len) return false;
+static bool urus_str_equal(urus_str *a, urus_str *b)
+{
+    if (a == b)
+        return true; // compare address
+    if (a->data == b->data)
+        return true; // compare address
+    if (a->len != b->len)
+        return false;
     return memcmp(a->data, b->data, a->len) == 0;
 }
 
-static urus_str *urus_str_from(const char *s) {
+static urus_str *urus_str_from(const char *s)
+{
     return urus_str_new(s, strlen(s));
 }
 
-static urus_str *urus_str_concat(urus_str *a, urus_str *b) {
+static urus_str *urus_str_concat(urus_str *a, urus_str *b)
+{
     size_t len = a->len + b->len;
     urus_str *str = (urus_str *)urus_alloc(sizeof(urus_str) + len + 1);
     str->len = len;
@@ -115,52 +130,73 @@ static urus_str *urus_str_concat(urus_str *a, urus_str *b) {
 
 // ---- String stdlib ----
 
-static int64_t urus_str_len(urus_str *s) {
+static int64_t urus_str_len(urus_str *s)
+{
     return (int64_t)s->len;
 }
 
-static urus_str *urus_str_slice(urus_str *s, int64_t start, int64_t end) {
-    if (start < 0) start = 0;
-    if (end > (int64_t)s->len) end = (int64_t)s->len;
-    if (start >= end) return urus_str_from("");
+static urus_str *urus_str_slice(urus_str *s, int64_t start, int64_t end)
+{
+    if (start < 0)
+        start = 0;
+    if (end > (int64_t)s->len)
+        end = (int64_t)s->len;
+    if (start >= end)
+        return urus_str_from("");
     return urus_str_new(s->data + start, (size_t)(end - start));
 }
 
-static int64_t urus_str_find(urus_str *s, urus_str *sub) {
+static int64_t urus_str_find(urus_str *s, urus_str *sub)
+{
     char *p = strstr(s->data, sub->data);
-    if (!p) return -1;
+    if (!p)
+        return -1;
     return (int64_t)(p - s->data);
 }
 
-static bool urus_str_contains(urus_str *s, urus_str *sub) {
+static bool urus_str_contains(urus_str *s, urus_str *sub)
+{
     return strstr(s->data, sub->data) != NULL;
 }
 
-static urus_str *urus_str_upper(urus_str *s) {
+static urus_str *urus_str_upper(urus_str *s)
+{
     urus_str *r = urus_str_new(s->data, s->len);
-    for (size_t i = 0; i < r->len; i++) r->data[i] = (char)toupper((unsigned char)r->data[i]);
+    for (size_t i = 0; i < r->len; i++)
+        r->data[i] = (char)toupper((unsigned char)r->data[i]);
     return r;
 }
 
-static urus_str *urus_str_lower(urus_str *s) {
+static urus_str *urus_str_lower(urus_str *s)
+{
     urus_str *r = urus_str_new(s->data, s->len);
-    for (size_t i = 0; i < r->len; i++) r->data[i] = (char)tolower((unsigned char)r->data[i]);
+    for (size_t i = 0; i < r->len; i++)
+        r->data[i] = (char)tolower((unsigned char)r->data[i]);
     return r;
 }
 
-static urus_str *urus_str_trim(urus_str *s) {
+static urus_str *urus_str_trim(urus_str *s)
+{
     size_t start = 0, end = s->len;
-    while (start < end && isspace((unsigned char)s->data[start])) start++;
-    while (end > start && isspace((unsigned char)s->data[end - 1])) end--;
+    while (start < end && isspace((unsigned char)s->data[start]))
+        start++;
+    while (end > start && isspace((unsigned char)s->data[end - 1]))
+        end--;
     return urus_str_new(s->data + start, end - start);
 }
 
-static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
-    if (old->len == 0) return urus_str_new(s->data, s->len);
+static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s)
+{
+    if (old->len == 0)
+        return urus_str_new(s->data, s->len);
     int count = 0;
     const char *p = s->data;
-    while ((p = strstr(p, old->data)) != NULL) { count++; p += old->len; }
-    if (count == 0) return urus_str_new(s->data, s->len);
+    while ((p = strstr(p, old->data)) != NULL) {
+        count++;
+        p += old->len;
+    }
+    if (count == 0)
+        return urus_str_new(s->data, s->len);
 
     // Use signed arithmetic to avoid unsigned underflow
     ptrdiff_t diff = (ptrdiff_t)new_s->len - (ptrdiff_t)old->len;
@@ -178,8 +214,10 @@ static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
     const char *q;
     while ((q = strstr(p, old->data)) != NULL) {
         size_t chunk = (size_t)(q - p);
-        memcpy(dst, p, chunk); dst += chunk;
-        memcpy(dst, new_s->data, new_s->len); dst += new_s->len;
+        memcpy(dst, p, chunk);
+        dst += chunk;
+        memcpy(dst, new_s->data, new_s->len);
+        dst += new_s->len;
         p = q + old->len;
     }
     size_t remaining = strlen(p);
@@ -188,18 +226,25 @@ static urus_str *urus_str_replace(urus_str *s, urus_str *old, urus_str *new_s) {
     return r;
 }
 
-static bool urus_str_starts_with(urus_str *s, urus_str *prefix) {
-    if (prefix->len > s->len) return false;
+static bool urus_str_starts_with(urus_str *s, urus_str *prefix)
+{
+    if (prefix->len > s->len)
+        return false;
     return memcmp(s->data, prefix->data, prefix->len) == 0;
 }
 
-static bool urus_str_ends_with(urus_str *s, urus_str *suffix) {
-    if (suffix->len > s->len) return false;
-    return memcmp(s->data + s->len - suffix->len, suffix->data, suffix->len) == 0;
+static bool urus_str_ends_with(urus_str *s, urus_str *suffix)
+{
+    if (suffix->len > s->len)
+        return false;
+    return memcmp(s->data + s->len - suffix->len, suffix->data, suffix->len) ==
+           0;
 }
 
-static urus_str *urus_char_at(urus_str *s, int64_t i) {
-    if (i < 0 || i >= (int64_t)s->len) return urus_str_from("");
+static urus_str *urus_char_at(urus_str *s, int64_t i)
+{
+    if (i < 0 || i >= (int64_t)s->len)
+        return urus_str_from("");
     return urus_str_new(s->data + i, 1);
 }
 
@@ -215,12 +260,15 @@ typedef struct {
     void *data;
 } urus_array;
 
-static urus_array *urus_array_new(size_t elem_size, size_t initial_cap, urus_drop_fn elem_drop);
+static urus_array *urus_array_new(size_t elem_size, size_t initial_cap,
+                                  urus_drop_fn elem_drop);
 static void urus_array_push(urus_array *arr, const void *elem);
 
 // Forward declare for str_split
-static urus_array *urus_str_split(urus_str *s, urus_str *delim) {
-    urus_array *arr = urus_array_new(sizeof(urus_str *), 4, (urus_drop_fn)urus_str_drop);
+static urus_array *urus_str_split(urus_str *s, urus_str *delim)
+{
+    urus_array *arr =
+        urus_array_new(sizeof(urus_str *), 4, (urus_drop_fn)urus_str_drop);
     if (delim->len == 0) {
         for (size_t i = 0; i < s->len; i++) {
             urus_str *c = urus_str_new(s->data + i, 1);
@@ -240,7 +288,9 @@ static urus_array *urus_str_split(urus_str *s, urus_str *delim) {
     return arr;
 }
 
-static urus_array *urus_array_new(size_t elem_size, size_t initial_cap, urus_drop_fn elem_drop) {
+static urus_array *urus_array_new(size_t elem_size, size_t initial_cap,
+                                  urus_drop_fn elem_drop)
+{
     urus_array *arr = (urus_array *)urus_alloc(sizeof(urus_array));
     arr->len = 0;
     arr->cap = initial_cap > 0 ? initial_cap : 4;
@@ -250,13 +300,15 @@ static urus_array *urus_array_new(size_t elem_size, size_t initial_cap, urus_dro
     return arr;
 }
 
-static void urus_array_drop(urus_array **ap) {
+static void urus_array_drop(urus_array **ap)
+{
     if (ap && *ap) {
         urus_array *a = *ap;
         if (a->elem_drop) {
             for (size_t i = 0; i < a->len; i++) {
-                void *obj = *(void**)((char*)a->data + (i * a->elem_size));
-                if (obj) a->elem_drop(&obj);
+                void *obj = *(void **)((char *)a->data + (i * a->elem_size));
+                if (obj)
+                    a->elem_drop(&obj);
             }
         }
         free(a->data);
@@ -265,7 +317,8 @@ static void urus_array_drop(urus_array **ap) {
     }
 }
 
-static void urus_array_push(urus_array *arr, const void *elem) {
+static void urus_array_push(urus_array *arr, const void *elem)
+{
     if (arr->len >= arr->cap) {
         arr->cap *= 2;
         arr->data = urus_realloc(arr->data, arr->elem_size * arr->cap);
@@ -275,53 +328,66 @@ static void urus_array_push(urus_array *arr, const void *elem) {
     arr->len++;
 }
 
-static void *urus_array_get_ptr(urus_array *arr, size_t index) {
+static void *urus_array_get_ptr(urus_array *arr, size_t index)
+{
     if (index >= arr->len) {
-        fprintf(stderr, "Error: array index %zu out of bounds (len=%zu)\n", index, arr->len);
+        fprintf(stderr, "Error: array index %zu out of bounds (len=%zu)\n",
+                index, arr->len);
         exit(1);
     }
     return (char *)arr->data + index * arr->elem_size;
 }
 
-static int64_t urus_array_get_int(urus_array *arr, size_t index) {
+static int64_t urus_array_get_int(urus_array *arr, size_t index)
+{
     return *(int64_t *)urus_array_get_ptr(arr, index);
 }
 
-static double urus_array_get_float(urus_array *arr, size_t index) {
+static double urus_array_get_float(urus_array *arr, size_t index)
+{
     return *(double *)urus_array_get_ptr(arr, index);
 }
 
-static bool urus_array_get_bool(urus_array *arr, size_t index) {
+static bool urus_array_get_bool(urus_array *arr, size_t index)
+{
     return *(bool *)urus_array_get_ptr(arr, index);
 }
 
-static urus_str *urus_array_get_str(urus_array *arr, size_t index) {
+static urus_str *urus_array_get_str(urus_array *arr, size_t index)
+{
     return *(urus_str **)urus_array_get_ptr(arr, index);
 }
 
-static void urus_array_set(urus_array *arr, size_t index, const void *elem) {
+static void urus_array_set(urus_array *arr, size_t index, const void *elem)
+{
     if (index >= arr->len) {
-        fprintf(stderr, "Error: array index %zu out of bounds (len=%zu)\n", index, arr->len);
+        fprintf(stderr, "Error: array index %zu out of bounds (len=%zu)\n",
+                index, arr->len);
         exit(1);
     }
     // drop old elements
     if (arr->elem_drop) {
-        void *obj = *(void**)((char*)arr->data + (index * arr->elem_size));
-        if (obj) arr->elem_drop(&obj);
+        void *obj = *(void **)((char *)arr->data + (index * arr->elem_size));
+        if (obj)
+            arr->elem_drop(&obj);
     }
     memcpy((char *)arr->data + index * arr->elem_size, elem, arr->elem_size);
 }
 
-static int64_t urus_len(urus_array *arr) {
+static int64_t urus_len(urus_array *arr)
+{
     return (int64_t)arr->len;
 }
 
-static void urus_pop(urus_array *arr) {
+static void urus_pop(urus_array *arr)
+{
     if (arr->len > 0) {
         arr->len--;
         if (arr->elem_drop) {
-            void *obj = *(void**)((char*)arr->data + (arr->len * arr->elem_size));
-            if (obj) arr->elem_drop(&obj);
+            void *obj =
+                *(void **)((char *)arr->data + (arr->len * arr->elem_size));
+            if (obj)
+                arr->elem_drop(&obj);
         }
     }
 }
@@ -330,99 +396,161 @@ static void urus_pop(urus_array *arr) {
 // to_str / to_int / to_float conversions
 // ============================================================
 
-static urus_str *urus_int_to_str(int64_t v) {
+static urus_str *urus_int_to_str(int64_t v)
+{
     char buf[32];
     int n = snprintf(buf, sizeof(buf), "%" PRId64, v);
     return urus_str_new(buf, (size_t)n);
 }
 
-static urus_str *urus_float_to_str(double v) {
+static urus_str *urus_float_to_str(double v)
+{
     char buf[64];
     int n = snprintf(buf, sizeof(buf), "%g", v);
     return urus_str_new(buf, (size_t)n);
 }
 
-static urus_str *urus_bool_to_str(bool v) {
+static urus_str *urus_bool_to_str(bool v)
+{
     return v ? urus_str_from("true") : urus_str_from("false");
 }
 
-static urus_str *urus_str_to_str(urus_str *s) {
+static urus_str *urus_str_to_str(urus_str *s)
+{
     return urus_str_new(s->data, s->len);
 }
 
-static int64_t urus_str_to_int(urus_str *s) { return strtoll(s->data, NULL, 10); }
-static int64_t urus_float_to_int(double v) { return (int64_t)v; }
-static int64_t urus_int_to_int(int64_t v) { return v; }
+static int64_t urus_str_to_int(urus_str *s)
+{
+    return strtoll(s->data, NULL, 10);
+}
+static int64_t urus_float_to_int(double v)
+{
+    return (int64_t)v;
+}
+static int64_t urus_int_to_int(int64_t v)
+{
+    return v;
+}
 
-static double urus_str_to_float(urus_str *s) { return strtod(s->data, NULL); }
-static double urus_int_to_float(int64_t v) { return (double)v; }
-static double urus_float_to_float(double v) { return v; }
+static double urus_str_to_float(urus_str *s)
+{
+    return strtod(s->data, NULL);
+}
+static double urus_int_to_float(int64_t v)
+{
+    return (double)v;
+}
+static double urus_float_to_float(double v)
+{
+    return v;
+}
 
 // ============================================================
 // print
 // ============================================================
 
-static void urus_print_str(urus_str *s) { printf("%s\n", s->data); }
-static void urus_print_int(int64_t v) { printf("%" PRId64 "\n", v); }
-static void urus_print_float(double v) { printf("%g\n", v); }
-static void urus_print_bool(bool v) { printf("%s\n", v ? "true" : "false"); }
+static void urus_print_str(urus_str *s)
+{
+    printf("%s\n", s->data);
+}
+static void urus_print_int(int64_t v)
+{
+    printf("%" PRId64 "\n", v);
+}
+static void urus_print_float(double v)
+{
+    printf("%g\n", v);
+}
+static void urus_print_bool(bool v)
+{
+    printf("%s\n", v ? "true" : "false");
+}
 
-#define urus_print(x) _Generic((x), \
-    urus_str*: urus_print_str, \
-    int64_t:   urus_print_int, \
-    int:       urus_print_int, \
-    double:    urus_print_float, \
-    bool:      urus_print_bool \
-)(x)
+#define urus_print(x)               \
+    _Generic((x),                   \
+        urus_str *: urus_print_str, \
+        int64_t: urus_print_int,    \
+        int: urus_print_int,        \
+        double: urus_print_float,   \
+        bool: urus_print_bool)(x)
 
-#define to_str(x) _Generic((x), \
-    int64_t:   urus_int_to_str, \
-    int:       urus_int_to_str, \
-    double:    urus_float_to_str, \
-    bool:      urus_bool_to_str, \
-    urus_str*: urus_str_to_str \
-)(x)
+#define to_str(x)                  \
+    _Generic((x),                  \
+        int64_t: urus_int_to_str,  \
+        int: urus_int_to_str,      \
+        double: urus_float_to_str, \
+        bool: urus_bool_to_str,    \
+        urus_str *: urus_str_to_str)(x)
 
-#define to_int(x) _Generic((x), \
-    urus_str*: urus_str_to_int, \
-    double:    urus_float_to_int, \
-    int64_t:   urus_int_to_int, \
-    int:       urus_int_to_int \
-)(x)
+#define to_int(x)                    \
+    _Generic((x),                    \
+        urus_str *: urus_str_to_int, \
+        double: urus_float_to_int,   \
+        int64_t: urus_int_to_int,    \
+        int: urus_int_to_int)(x)
 
-#define to_float(x) _Generic((x), \
-    urus_str*: urus_str_to_float, \
-    int64_t:   urus_int_to_float, \
-    int:       urus_int_to_float, \
-    double:    urus_float_to_float \
-)(x)
+#define to_float(x)                    \
+    _Generic((x),                      \
+        urus_str *: urus_str_to_float, \
+        int64_t: urus_int_to_float,    \
+        int: urus_int_to_float,        \
+        double: urus_float_to_float)(x)
 
 // ============================================================
 // Math
 // ============================================================
 
-static int64_t urus_abs(int64_t x) { return x < 0 ? -x : x; }
-static double urus_fabs(double x) { return fabs(x); }
-static double urus_sqrt(double x) { return sqrt(x); }
-static double urus_pow(double x, double y) { return pow(x, y); }
-static int64_t urus_min(int64_t a, int64_t b) { return a < b ? a : b; }
-static int64_t urus_max(int64_t a, int64_t b) { return a > b ? a : b; }
-static double urus_fmin(double a, double b) { return fmin(a, b); }
-static double urus_fmax(double a, double b) { return fmax(a, b); }
+static int64_t urus_abs(int64_t x)
+{
+    return x < 0 ? -x : x;
+}
+static double urus_fabs(double x)
+{
+    return fabs(x);
+}
+static double urus_sqrt(double x)
+{
+    return sqrt(x);
+}
+static double urus_pow(double x, double y)
+{
+    return pow(x, y);
+}
+static int64_t urus_min(int64_t a, int64_t b)
+{
+    return a < b ? a : b;
+}
+static int64_t urus_max(int64_t a, int64_t b)
+{
+    return a > b ? a : b;
+}
+static double urus_fmin(double a, double b)
+{
+    return fmin(a, b);
+}
+static double urus_fmax(double a, double b)
+{
+    return fmax(a, b);
+}
 
 // ============================================================
 // I/O
 // ============================================================
 
-static urus_str *urus_input(void) {
+static urus_str *urus_input(void)
+{
     char buf[4096];
-    if (!fgets(buf, sizeof(buf), stdin)) return urus_str_from("");
+    if (!fgets(buf, sizeof(buf), stdin))
+        return urus_str_from("");
     size_t len = strlen(buf);
-    if (len > 0 && buf[len - 1] == '\n') len--;
+    if (len > 0 && buf[len - 1] == '\n')
+        len--;
     return urus_str_new(buf, len);
 }
 
-static urus_str *urus_read_file(urus_str *path) {
+static urus_str *urus_read_file(urus_str *path)
+{
     FILE *f = fopen(path->data, "rb");
     if (!f) {
         fprintf(stderr, "Error: cannot open file '%s'\n", path->data);
@@ -445,16 +573,24 @@ static urus_str *urus_read_file(urus_str *path) {
     return s;
 }
 
-static void urus_write_file(urus_str *path, urus_str *content) {
+static void urus_write_file(urus_str *path, urus_str *content)
+{
     FILE *f = fopen(path->data, "wb");
-    if (!f) { fprintf(stderr, "Error: cannot write file '%s'\n", path->data); return; }
+    if (!f) {
+        fprintf(stderr, "Error: cannot write file '%s'\n", path->data);
+        return;
+    }
     fwrite(content->data, 1, content->len, f);
     fclose(f);
 }
 
-static void urus_append_file(urus_str *path, urus_str *content) {
+static void urus_append_file(urus_str *path, urus_str *content)
+{
     FILE *f = fopen(path->data, "ab");
-    if (!f) { fprintf(stderr, "Error: cannot append file '%s'\n", path->data); return; }
+    if (!f) {
+        fprintf(stderr, "Error: cannot append file '%s'\n", path->data);
+        return;
+    }
     fwrite(content->data, 1, content->len, f);
     fclose(f);
 }
@@ -471,7 +607,7 @@ typedef union {
 } urus_box;
 
 typedef struct {
-    int tag;  // 0 = Ok, 1 = Err
+    int tag; // 0 = Ok, 1 = Err
     urus_drop_fn ok_drop;
     union {
         urus_box ok;
@@ -479,7 +615,8 @@ typedef struct {
     } data;
 } urus_result;
 
-static urus_result *urus_result_ok(urus_box *val, urus_drop_fn ok_drop) {
+static urus_result *urus_result_ok(urus_box *val, urus_drop_fn ok_drop)
+{
     urus_result *r = (urus_result *)urus_alloc(sizeof(urus_result));
     r->tag = 0;
     r->ok_drop = ok_drop;
@@ -487,17 +624,25 @@ static urus_result *urus_result_ok(urus_box *val, urus_drop_fn ok_drop) {
     return r;
 }
 
-static urus_result *urus_result_err(urus_str *msg) {
+static urus_result *urus_result_err(urus_str *msg)
+{
     urus_result *r = (urus_result *)urus_alloc(sizeof(urus_result));
     r->tag = 1;
     r->data.err = msg;
     return r;
 }
 
-static bool urus_result_is_ok(urus_result *r) { return r->tag == 0; }
-static bool urus_result_is_err(urus_result *r) { return r->tag == 1; }
+static bool urus_result_is_ok(urus_result *r)
+{
+    return r->tag == 0;
+}
+static bool urus_result_is_err(urus_result *r)
+{
+    return r->tag == 1;
+}
 
-static int64_t urus_result_unwrap(urus_result *r) {
+static int64_t urus_result_unwrap(urus_result *r)
+{
     if (r->tag != 0) {
         fprintf(stderr, "Error: unwrap called on Err: %s\n", r->data.err->data);
         exit(1);
@@ -505,7 +650,8 @@ static int64_t urus_result_unwrap(urus_result *r) {
     return r->data.ok.as_int;
 }
 
-static double urus_result_unwrap_float(urus_result *r) {
+static double urus_result_unwrap_float(urus_result *r)
+{
     if (r->tag != 0) {
         fprintf(stderr, "Error: unwrap called on Err: %s\n", r->data.err->data);
         exit(1);
@@ -513,7 +659,8 @@ static double urus_result_unwrap_float(urus_result *r) {
     return r->data.ok.as_float;
 }
 
-static bool urus_result_unwrap_bool(urus_result *r) {
+static bool urus_result_unwrap_bool(urus_result *r)
+{
     if (r->tag != 0) {
         fprintf(stderr, "Error: unwrap called on Err: %s\n", r->data.err->data);
         exit(1);
@@ -521,7 +668,8 @@ static bool urus_result_unwrap_bool(urus_result *r) {
     return r->data.ok.as_bool;
 }
 
-static urus_str *urus_result_unwrap_str(urus_result *r) {
+static urus_str *urus_result_unwrap_str(urus_result *r)
+{
     if (r->tag != 0) {
         fprintf(stderr, "Error: unwrap called on Err: %s\n", r->data.err->data);
         exit(1);
@@ -529,7 +677,8 @@ static urus_str *urus_result_unwrap_str(urus_result *r) {
     return (urus_str *)r->data.ok.as_ptr;
 }
 
-static void *urus_result_unwrap_ptr(urus_result *r) {
+static void *urus_result_unwrap_ptr(urus_result *r)
+{
     if (r->tag != 0) {
         fprintf(stderr, "Error: unwrap called on Err: %s\n", r->data.err->data);
         exit(1);
@@ -537,7 +686,8 @@ static void *urus_result_unwrap_ptr(urus_result *r) {
     return r->data.ok.as_ptr;
 }
 
-static urus_str *urus_result_unwrap_err(urus_result *r) {
+static urus_str *urus_result_unwrap_err(urus_result *r)
+{
     if (r->tag != 1) {
         fprintf(stderr, "Error: unwrap_err called on Ok\n");
         exit(1);
@@ -545,13 +695,15 @@ static urus_str *urus_result_unwrap_err(urus_result *r) {
     return r->data.err;
 }
 
-static void urus_result_drop(urus_result **rp) {
+static void urus_result_drop(urus_result **rp)
+{
     if (rp && *rp) {
         urus_result *r = *rp;
         if (r->tag == 1 && r->data.err) {
             urus_str_drop(&r->data.err);
         } else if (r->tag == 0 && r->ok_drop) {
-            if (r->data.ok.as_ptr) r->ok_drop(&r->data.ok.as_ptr);
+            if (r->data.ok.as_ptr)
+                r->ok_drop(&r->data.ok.as_ptr);
         }
         free(r);
         *rp = NULL;
@@ -562,11 +714,13 @@ static void urus_result_drop(urus_result **rp) {
 // Misc
 // ============================================================
 
-static void urus_exit(int64_t code) {
+static void urus_exit(int64_t code)
+{
     exit((int)code);
 }
 
-static void urus_assert(bool cond, urus_str *msg) {
+static void urus_assert(bool cond, urus_str *msg)
+{
     if (!cond) {
         fprintf(stderr, "Assertion failed: %s\n", msg->data);
         exit(1);

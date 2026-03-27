@@ -23,41 +23,40 @@
 #define URUS_URUSC_H
 
 #ifndef _WIN32
-#   define _POSIX_C_SOURCE 200809L 
+#define _POSIX_C_SOURCE 200809L
 #endif
 
 #include "config.h"
 #include "urusctok.h"
-#include <stddef.h>
-#include <stdbool.h>
-#include <limits.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdarg.h>
 #include <string.h>
 
 #ifdef _WIN32
-#   define URUSC_PATHSEP '\\'
+#define URUSC_PATHSEP '\\'
 #else
-#   define URUSC_PATHSEP '/'
+#define URUSC_PATHSEP '/'
 #endif
 
 #ifndef PATH_MAX
-#   ifdef MAX_PATH
-#       define PATH_MAX MAX_PATH
-#   else
-#       define PATH_MAX 4096 /* safe default value */
-#   endif
+#ifdef MAX_PATH
+#define PATH_MAX MAX_PATH
+#else
+#define PATH_MAX 4096 /* safe default value */
+#endif
 #endif
 
 //
 // Error reporting
 //
-  
+
 // <filename>:ln:col: <error_type>: <msg>
 //       |
 //  <ln> | <file_content_ln>
@@ -595,7 +594,8 @@ extern const BuiltinMap urus_builtin_direct_maps[];
 bool sema_analyze(AstNode *program, const char *filename);
 
 // Builtin registration
-// register all builtins function into semantic scope to prevent undefined error on builtin function
+// register all builtins function into semantic scope to prevent undefined error
+// on builtin function
 void sema_register_builtins(SemaScope *global);
 
 // scope function

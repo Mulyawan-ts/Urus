@@ -740,7 +740,8 @@ static void gen_expr(CodeBuf *buf, AstNode *node)
         } else {
             const char *c_name = NULL;
             if (fn_name) {
-                for (const BuiltinMap *m = urus_builtin_direct_maps; m->urus; m++) {
+                for (const BuiltinMap *m = urus_builtin_direct_maps; m->urus;
+                     m++) {
                     if (strcmp(fn_name, m->urus) == 0) {
                         c_name = m->c;
                         break;
