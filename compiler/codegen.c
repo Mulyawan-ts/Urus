@@ -1315,9 +1315,11 @@ static void gen_stmt(CodeBuf *buf, AstNode *node)
         }
         break;
     case NODE_DEFER_STMT:
-        if (defer_count < 64) {
-            defer_stack[defer_count++] = node->as.defer_stmt.body;
+        if (defer_count >= 64) {
+            fprintf(stderr, "Error: too many defer statements (max 64)\n");
+            exit(1);
         }
+        defer_stack[defer_count++] = node->as.defer_stmt.body;
         break;
     case NODE_BREAK_STMT:
         emit_indent(buf);
