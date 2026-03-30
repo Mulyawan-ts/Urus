@@ -324,11 +324,11 @@ static void emit_type_drop(CodeBuf *buf, AstType *t)
 
     char dtor[128];
     if (t->kind == TYPE_STR)
-        strcpy(dtor, "urus_str_drop");
+        snprintf(dtor, sizeof(dtor), "urus_str_drop");
     else if (t->kind == TYPE_ARRAY)
-        strcpy(dtor, "urus_array_drop");
+        snprintf(dtor, sizeof(dtor), "urus_array_drop");
     else if (t->kind == TYPE_RESULT)
-        strcpy(dtor, "urus_result_drop");
+        snprintf(dtor, sizeof(dtor), "urus_result_drop");
     else if (t->kind == TYPE_NAMED)
         snprintf(dtor, sizeof(dtor), "%s_drop", t->name);
 
