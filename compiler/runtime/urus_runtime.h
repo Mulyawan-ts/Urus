@@ -304,7 +304,7 @@ static void urus_array_drop(urus_array **ap)
 {
     if (ap && *ap) {
         urus_array *a = *ap;
-        if (a->elem_drop) {
+        if (a->elem_drop && a->data) {
             for (size_t i = 0; i < a->len; i++) {
                 void *obj = *(void **)((char *)a->data + (i * a->elem_size));
                 if (obj)
