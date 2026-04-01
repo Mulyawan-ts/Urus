@@ -1496,9 +1496,16 @@ static AstNode *parse_fn_decl(Parser *p)
             }
             bool param_mut = match(p, TOK_MUT);
             Token pname = expect(p, TOK_IDENT, "expected parameter name");
-            expect(p, TOK_COLON, "expected ':' after parameter name");
-            AstType *ptype = parse_type(p);
-            params[count].name = tok_str(pname);
+            // 'self' parameter doesn't need a type annotation
+            char *pn = tok_str(pname);
+            AstType *ptype;
+            if (strcmp(pn, "self") == 0 && !check(p, TOK_COLON)) {
+                ptype = NULL; // filled by sema for impl blocks
+            } else {
+                expect(p, TOK_COLON, "expected ':' after parameter name");
+                ptype = parse_type(p);
+            }
+            params[count].name = pn;
             params[count].type = ptype;
             params[count].is_mut = param_mut;
             params[count].tok = pname;
@@ -1776,6 +1783,125 @@ static AstNode *parse_type_alias(Parser *p)
     return n;
 }
 
+static AstNode *parse_trait_decl(Parser *p)
+{
+    Token trait_tok = expect(p, TOK_TRAIT, "expected 'trait'");
+    Token name = expect(p, TOK_IDENT, "expected trait name");
+    expect(p, TOK_LBRACE, "expected '{'");
+
+    int cap = 4, count = 0;
+    AstNode **methods = xmalloc(sizeof(AstNode *) * (size_t)cap);
+
+    while (!check(p, TOK_RBRACE) && !at_end(p)) {
+        if (count >= cap) {
+            cap *= 2;
+            methods = xrealloc(methods, sizeof(AstNode *) * (size_t)cap);
+        }
+        // Parse method signature: fn name(self, params): ret;
+        expect(p, TOK_FN, "expected 'fn' in trait");
+        Token mname = expect(p, TOK_IDENT, "expected method name");
+
+        // Parse optional generic params
+        int gcount = 0;
+        char **gparams = parse_generic_params(p, &gcount);
+
+        expect(p, TOK_LPAREN, "expected '('");
+        int pcap = 4, pcount = 0;
+        Param *params = xmalloc(sizeof(Param) * (size_t)pcap);
+
+        if (!check(p, TOK_RPAREN)) {
+            do {
+                if (pcount >= pcap) {
+                    pcap *= 2;
+                    params = xrealloc(params, sizeof(Param) * (size_t)pcap);
+                }
+                // 'self' is a special parameter
+                Token pname = expect(p, TOK_IDENT, "expected parameter name");
+                char *pn = tok_str(pname);
+                if (strcmp(pn, "self") == 0) {
+                    params[pcount].name = pn;
+                    params[pcount].type = NULL; // filled during sema
+                    params[pcount].tok = pname;
+                    params[pcount].default_value = NULL;
+                    params[pcount].is_mut = false;
+                } else {
+                    expect(p, TOK_COLON, "expected ':' after parameter name");
+                    AstType *ptype = parse_type(p);
+                    params[pcount].name = pn;
+                    params[pcount].type = ptype;
+                    params[pcount].tok = pname;
+                    params[pcount].default_value = NULL;
+                    params[pcount].is_mut = false;
+                }
+                pcount++;
+            } while (match(p, TOK_COMMA));
+        }
+        expect(p, TOK_RPAREN, "expected ')'");
+
+        AstType *ret = ast_type_simple(TYPE_VOID);
+        if (match(p, TOK_COLON)) {
+            ret = parse_type(p);
+        }
+        expect(p, TOK_SEMICOLON, "expected ';' after trait method signature");
+
+        AstNode *m = ast_new(NODE_FN_DECL, mname);
+        m->as.fn_decl.name = tok_str(mname);
+        m->as.fn_decl.params = params;
+        m->as.fn_decl.param_count = pcount;
+        m->as.fn_decl.return_type = ret;
+        m->as.fn_decl.body = NULL; // no body in trait signature
+        m->as.fn_decl.generic_params = gparams;
+        m->as.fn_decl.generic_param_count = gcount;
+        methods[count++] = m;
+    }
+    expect(p, TOK_RBRACE, "expected '}'");
+
+    AstNode *n = ast_new(NODE_TRAIT_DECL, trait_tok);
+    n->as.trait_decl.name = tok_str(name);
+    n->as.trait_decl.methods = methods;
+    n->as.trait_decl.method_count = count;
+    return n;
+}
+
+static AstNode *parse_impl_block(Parser *p)
+{
+    Token impl_tok = expect(p, TOK_IMPL, "expected 'impl'");
+    Token first_name = expect(p, TOK_IDENT, "expected type or trait name");
+    char *trait_name = NULL;
+    char *type_name = NULL;
+
+    // Check for "impl Trait for Type" vs "impl Type"
+    if (check(p, TOK_FOR)) {
+        advance_tok(p); // skip 'for'
+        trait_name = tok_str(first_name);
+        Token tname = expect(p, TOK_IDENT, "expected type name after 'for'");
+        type_name = tok_str(tname);
+    } else {
+        type_name = tok_str(first_name);
+    }
+
+    expect(p, TOK_LBRACE, "expected '{'");
+
+    int cap = 4, count = 0;
+    AstNode **methods = xmalloc(sizeof(AstNode *) * (size_t)cap);
+
+    while (!check(p, TOK_RBRACE) && !at_end(p)) {
+        if (count >= cap) {
+            cap *= 2;
+            methods = xrealloc(methods, sizeof(AstNode *) * (size_t)cap);
+        }
+        methods[count++] = parse_fn_decl(p);
+    }
+    expect(p, TOK_RBRACE, "expected '}'");
+
+    AstNode *n = ast_new(NODE_IMPL_BLOCK, impl_tok);
+    n->as.impl_block.trait_name = trait_name;
+    n->as.impl_block.type_name = type_name;
+    n->as.impl_block.methods = methods;
+    n->as.impl_block.method_count = count;
+    return n;
+}
+
 static AstNode *parse_declaration(Parser *p)
 {
     if (check(p, TOK_FN))
@@ -1794,6 +1920,10 @@ static AstNode *parse_declaration(Parser *p)
         return parse_type_alias(p);
     if (check(p, TOK_EMIT))
         return parse_emit(p, true);
+    if (check(p, TOK_TRAIT))
+        return parse_trait_decl(p);
+    if (check(p, TOK_IMPL))
+        return parse_impl_block(p);
     return parse_statement(p);
 }
 

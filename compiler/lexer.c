@@ -123,7 +123,8 @@ static TokenType check_keyword(const char *start, size_t len)
         {"import", 6, TOK_IMPORT}, {"rune", 4, TOK_RUNE},
         {"const", 5, TOK_CONST},   {"do", 2, TOK_DO},
         {"__emit__", 8, TOK_EMIT}, {"type", 4, TOK_TYPE},
-        {"defer", 5, TOK_DEFER},   {"int", 3, TOK_INT},
+        {"defer", 5, TOK_DEFER},   {"trait", 5, TOK_TRAIT},
+        {"impl", 4, TOK_IMPL},     {"int", 3, TOK_INT},
         {"float", 5, TOK_FLOAT},   {"bool", 4, TOK_BOOL},
         {"str", 3, TOK_STR},       {"void", 4, TOK_VOID},
         {"Ok", 2, TOK_OK},         {"Err", 3, TOK_ERR},
@@ -575,6 +576,10 @@ const char *token_type_name(TokenType type)
         return "DO";
     case TOK_TYPE:
         return "TYPE";
+    case TOK_TRAIT:
+        return "TRAIT";
+    case TOK_IMPL:
+        return "IMPL";
     case TOK_DEFER:
         return "DEFER";
     case TOK_ARROW:

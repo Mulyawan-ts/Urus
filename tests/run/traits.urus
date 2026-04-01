@@ -1,0 +1,28 @@
+struct Point {
+    x: float;
+    y: float;
+}
+
+trait Display {
+    fn to_string(self): str;
+}
+
+impl Display for Point {
+    fn to_string(self): str {
+        return "Point";
+    }
+}
+
+impl Point {
+    fn length(self): float {
+        return sqrt(self.x * self.x + self.y * self.y);
+    }
+}
+
+fn main(): void {
+    let p: Point = Point { x: 3.0, y: 4.0 };
+    let s: str = p.to_string();
+    print(s);
+    let len: float = p.length();
+    print(len);
+}
