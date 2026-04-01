@@ -38,6 +38,8 @@ typedef enum {
     TOK_TYPE,
     TOK_DEFER,
     TOK_EMIT,
+    TOK_TRAIT,
+    TOK_IMPL,
 
     // Type keywords
     TOK_INT,

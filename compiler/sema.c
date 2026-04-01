@@ -1398,6 +1398,57 @@ bool sema_analyze(AstNode *program, const char *filename)
             s->alias_type = d->as.type_alias.type;
             s->type = d->as.type_alias.type;
             s->is_referenced = true;
+        } else if (d->kind == NODE_TRAIT_DECL) {
+            // Register trait (for now, just mark as known)
+            if (scope_lookup_local(global, d->as.trait_decl.name)) {
+                sema_error(&ctx, &d->tok, "duplicate trait '%s'",
+                           d->as.trait_decl.name);
+                continue;
+            }
+            SemaSymbol *s = scope_add(global, d->as.trait_decl.name, d->tok);
+            s->tag = TYPE_SYM_TAG;
+            s->is_referenced = true;
+            s->alias_type = ast_type_named(d->as.trait_decl.name);
+        } else if (d->kind == NODE_IMPL_BLOCK) {
+            // Register impl methods as TypeName_methodName functions
+            const char *type_name = d->as.impl_block.type_name;
+            for (int j = 0; j < d->as.impl_block.method_count; j++) {
+                AstNode *m = d->as.impl_block.methods[j];
+                // Mangle name: TypeName_methodName
+                char mangled[512];
+                snprintf(mangled, sizeof(mangled), "%s_%s",
+                         type_name, m->as.fn_decl.name);
+                char *mname = strdup(mangled);
+
+                if (scope_lookup_local(global, mname)) {
+                    sema_error(&ctx, &m->tok, "duplicate method '%s' on '%s'",
+                               m->as.fn_decl.name, type_name);
+                    continue;
+                }
+
+                // Fill 'self' parameter type
+                for (int k = 0; k < m->as.fn_decl.param_count; k++) {
+                    if (strcmp(m->as.fn_decl.params[k].name, "self") == 0 &&
+                        !m->as.fn_decl.params[k].type) {
+                        m->as.fn_decl.params[k].type = ast_type_named(type_name);
+                    }
+                }
+
+                // Register as a normal function with mangled name
+                SemaSymbol *s = scope_add(global, mname, m->tok);
+                s->tag = FN_SYM_TAG;
+                s->is_imported = d->is_imported;
+                s->params = m->as.fn_decl.params;
+                s->param_count = m->as.fn_decl.param_count;
+                s->return_type = m->as.fn_decl.return_type;
+                s->generic_params = m->as.fn_decl.generic_params;
+                s->generic_param_count = m->as.fn_decl.generic_param_count;
+                s->is_referenced = true; // don't warn unused
+
+                // Store mangled name back for codegen
+                free(m->as.fn_decl.name);
+                m->as.fn_decl.name = mname;
+            }
         }
     }
 
@@ -1471,6 +1522,51 @@ bool sema_analyze(AstNode *program, const char *filename)
             ctx.current = global;
             scope_free(fn_scope);
             ctx.current_fn_name = "";
+        }
+        // Check impl block method bodies
+        if (d->kind == NODE_IMPL_BLOCK) {
+            for (int j = 0; j < d->as.impl_block.method_count; j++) {
+                AstNode *m = d->as.impl_block.methods[j];
+                SemaScope *fn_scope = scope_new(global);
+                ctx.current = fn_scope;
+                ctx.current_fn_name = m->as.fn_decl.name;
+
+                for (int g = 0; g < m->as.fn_decl.generic_param_count; g++) {
+                    SemaSymbol *gs = scope_add(fn_scope,
+                        m->as.fn_decl.generic_params[g], m->tok);
+                    gs->tag = TYPE_SYM_TAG;
+                    gs->alias_type = ast_type_generic(
+                        m->as.fn_decl.generic_params[g]);
+                    gs->is_referenced = true;
+                }
+
+                m->as.fn_decl.return_type =
+                    sema_resolve_type(&ctx, m->as.fn_decl.return_type);
+                for (int k = 0; k < m->as.fn_decl.param_count; k++)
+                    m->as.fn_decl.params[k].type =
+                        sema_resolve_type(&ctx, m->as.fn_decl.params[k].type);
+
+                ctx.current_fn_return = m->as.fn_decl.return_type;
+
+                for (int k = 0; k < m->as.fn_decl.param_count; k++) {
+                    Param *p = &m->as.fn_decl.params[k];
+                    SemaSymbol *ps = scope_add(fn_scope, p->name, p->tok);
+                    ps->is_imported = d->is_imported;
+                    ps->type = p->type;
+                    ps->is_mut = p->is_mut;
+                }
+
+                if (m->as.fn_decl.body) {
+                    AstNode *body = m->as.fn_decl.body;
+                    for (int k = 0; k < body->as.block.stmt_count; k++) {
+                        check_stmt(&ctx, body->as.block.stmts[k]);
+                    }
+                }
+
+                ctx.current = global;
+                scope_free(fn_scope);
+                ctx.current_fn_name = "";
+            }
         }
     }
 

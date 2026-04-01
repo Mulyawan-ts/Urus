@@ -1795,6 +1795,16 @@ void codegen_generate(CodeBuf *buf, AstNode *program)
     }
     emit(buf, "\n");
 
+    // Pass 3 (impl): forward declarations for impl methods
+    for (int i = 0; i < program->as.program.decl_count; i++) {
+        AstNode *d = program->as.program.decls[i];
+        if (d->kind == NODE_IMPL_BLOCK) {
+            for (int j = 0; j < d->as.impl_block.method_count; j++) {
+                gen_fn_forward(buf, d->as.impl_block.methods[j]);
+            }
+        }
+    }
+
     // Pass 3B: struct drop forward declarations
     for (int i = 0; i < program->as.program.decl_count; i++) {
         AstNode *d = program->as.program.decls[i];
@@ -1888,6 +1898,16 @@ void codegen_generate(CodeBuf *buf, AstNode *program)
         AstNode *d = program->as.program.decls[i];
         if (d->kind == NODE_FN_DECL && d->as.fn_decl.generic_param_count == 0) {
             gen_fn_decl(buf, d);
+        }
+    }
+
+    // Pass 4 (impl): impl method definitions
+    for (int i = 0; i < program->as.program.decl_count; i++) {
+        AstNode *d = program->as.program.decls[i];
+        if (d->kind == NODE_IMPL_BLOCK) {
+            for (int j = 0; j < d->as.impl_block.method_count; j++) {
+                gen_fn_decl(buf, d->as.impl_block.methods[j]);
+            }
         }
     }
 

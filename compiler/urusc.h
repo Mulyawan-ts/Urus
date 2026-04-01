@@ -132,6 +132,8 @@ typedef enum {
     NODE_ENUM_DECL,
     NODE_IMPORT,
     NODE_TYPE_ALIAS,
+    NODE_TRAIT_DECL,
+    NODE_IMPL_BLOCK,
 
     // Statements
     NODE_BLOCK,
@@ -478,6 +480,22 @@ struct AstNode {
             char *name;
             AstType *type;
         } type_alias;
+
+        // NODE_TRAIT_DECL
+        struct {
+            char *name;
+            // Method signatures (fn declarations without bodies)
+            AstNode **methods; // NODE_FN_DECL nodes (body may be NULL for required)
+            int method_count;
+        } trait_decl;
+
+        // NODE_IMPL_BLOCK
+        struct {
+            char *trait_name; // NULL for inherent impl
+            char *type_name;  // the type being implemented
+            AstNode **methods; // NODE_FN_DECL nodes with bodies
+            int method_count;
+        } impl_block;
     } as;
 
     // Filled by semantic analysis
