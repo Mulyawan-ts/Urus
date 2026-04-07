@@ -46,6 +46,21 @@ add_executable(urusc ${SOURCES} ${URUS_RUNTIME_EMBEDDED})
 
 target_include_directories(urusc PRIVATE "${CMAKE_CURRENT_BINARY_DIR}") # -I<BUILD DIRECTORIES> (example for config.h by config.h.in)
 
+# LSP server (shares compiler frontend sources)
+set(LSP_SHARED_SOURCES
+    lexer.c
+    ast.c
+    parser.c
+    misc.c
+    error.c
+    sema.c
+    builtins.c
+    preprocess.c
+)
+add_executable(urusc-lsp lsp.c ${LSP_SHARED_SOURCES} ${URUS_RUNTIME_EMBEDDED})
+target_include_directories(urusc-lsp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+install(TARGETS urusc-lsp DESTINATION bin)
+
 # -lm for non-windows
 if(UNIX AND NOT APPLE)
     target_link_libraries(urusc PRIVATE m)
