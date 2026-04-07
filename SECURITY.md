@@ -41,6 +41,10 @@ The following are in scope for security reports:
 | **Generated code** | Codegen producing unsafe C, missing bounds checks |
 | **Import system** | Path traversal, unintended file access |
 | **HTTP built-ins** | Request injection, unsafe URL handling in `http_get`/`http_post` |
+| **Async runtime** | Thread safety issues, race conditions in futures, data races |
+| **Package manager** | Dependency confusion, malicious packages, unsafe git clone targets |
+| **Closures** | Captured variable lifetime issues, dangling references |
+| **Traits / impl** | Incorrect method dispatch, type confusion in trait implementations |
 
 The following are **out of scope**:
 
@@ -58,5 +62,7 @@ The following are **out of scope**:
 - **Immutable by default:** Variables require explicit `mut` for mutation
 - **HTTP access:** `http_get()` and `http_post()` built-ins use `curl` — network access is opt-in per function call
 - **Raw emit:** `__emit__()` allows inline C code and bypasses all safety checks — use with caution
+- **Thread isolation:** Async functions run on separate threads with isolated stacks; shared state is not supported
+- **Package integrity:** The package manager resolves stdlib modules locally and clones external dependencies via git
 
 For more details, see the [Security Model](./documentation/security/security-model.md).
