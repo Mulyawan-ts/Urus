@@ -1,0 +1,49 @@
+{
+  "name": "urus-lang",
+  "displayName": "Urus Language",
+  "description": "Language support for the Urus programming language",
+  "version": "0.1.0",
+  "publisher": "urus-foundation",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Urus-Foundation/Urus"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onLanguage:urus"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "urus",
+        "aliases": ["Urus", "urus"],
+        "extensions": [".urus"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "urus",
+        "scopeName": "source.urus",
+        "path": "./syntaxes/urus.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Urus",
+      "properties": {
+        "urus.lsp.path": {
+          "type": "string",
+          "default": "urusc-lsp",
+          "description": "Path to the urusc-lsp binary"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}
