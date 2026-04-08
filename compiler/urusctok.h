@@ -43,6 +43,8 @@ typedef enum {
     TOK_ASYNC,
     TOK_AWAIT,
     TOK_TEST,
+    TOK_TRY,
+    TOK_CATCH,
 
     // Type keywords
     TOK_INT,
@@ -95,6 +97,7 @@ typedef enum {
     TOK_DOTDOTEQ, // ..=
     TOK_ARROW, // =>
     TOK_PIPE, // |
+    TOK_QUESTION, // ?
 
     // Punctuation
     TOK_LPAREN, // (

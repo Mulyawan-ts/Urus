@@ -255,16 +255,6 @@ fn main(): void {
 }
 ```
 
-No methods on structs. Use free functions:
-
-```
-fn distance(a: Point, b: Point): float {
-    let dx: float = a.x - b.x;
-    let dy: float = a.y - b.y;
-    return sqrt(dx * dx + dy * dy);
-}
-```
-
 ### Struct Spread Syntax
 
 Create a new struct by copying fields from an existing instance and overriding specific fields:
@@ -273,6 +263,10 @@ Create a new struct by copying fields from an existing instance and overriding s
 let p1: Point = Point { x: 1.0, y: 2.0 };
 let p2: Point = Point { x: 10.0, ..p1 };  // y copied from p1
 ```
+
+### Methods on Structs
+
+See [Section 25](#25-impl-blocks--methods).
 
 ## 9. Enums / Tagged Unions
 
@@ -394,7 +388,9 @@ print(f"Hello {name}! Count is {count}.");
 - Expressions are converted via `to_str()` and concatenated.
 - Use `{{` and `}}` for literal braces.
 
-## 14. Error Handling (Result Type)
+## 14. Error Handling
+
+### Result Type
 
 ```
 fn divide(a: int, b: int): Result<int, str> {
@@ -417,6 +413,33 @@ fn main(): void {
 - `Result<T, E>` is a tagged union with `Ok(T)` and `Err(E)` variants.
 - Built-in functions: `is_ok()`, `is_err()`, `unwrap()`, `unwrap_err()`.
 - `unwrap()` on an Err or `unwrap_err()` on an Ok aborts with an error message.
+
+### Error Propagation (`?` operator)
+
+The `?` operator propagates errors from `Result` values. If the value is `Err`, it returns early with the error; if `Ok`, it unwraps the value:
+
+```
+fn compute(x: int): Result<int, str> {
+    let val: int = divide(x, 2)?;
+    let val2: int = divide(val, 0)?;
+    return Ok(val2);
+}
+```
+
+### Try-Catch
+
+```
+try {
+    let result: int = compute(10)?;
+    print(result);
+} catch (e: str) {
+    print("Caught: " + e);
+}
+```
+
+- Inside a `try` block, `?` throws to the nearest `catch` block.
+- Outside a `try` block, `?` returns `Err` from the enclosing function.
+- Implementation uses `setjmp`/`longjmp` with thread-local try stacks.
 
 ## 15. Modules / Imports
 
@@ -627,6 +650,300 @@ All heap-allocated values (strings, arrays, structs) use reference counting.
 | `exit(code)` | Exit program with code |
 | `assert(cond, msg)` | Abort with message if condition false |
 
+## 24. Generics
+
+Functions can be parameterized with type parameters using angle brackets:
+
+```
+fn identity<T>(x: T): T {
+    return x;
+}
+
+fn max_val<T>(a: T, b: T): T {
+    if a > b { return a; }
+    return b;
+}
+```
+
+### Calling Generic Functions
+
+Type arguments are specified explicitly at the call site:
+
+```
+let a: int = max_val<int>(10, 20);
+let b: float = max_val<float>(3.14, 2.71);
+let c: str = identity<str>("hello generics");
+```
+
+### Implementation
+
+Generic functions are monomorphized at compile time — a specialized C function is generated for each unique type instantiation.
+
+## 25. Impl Blocks / Methods
+
+Methods can be defined on structs using `impl` blocks:
+
+```
+struct Point {
+    x: float;
+    y: float;
+}
+
+impl Point {
+    fn length(self): float {
+        return sqrt(self.x * self.x + self.y * self.y);
+    }
+}
+```
+
+### Method Calls
+
+```
+let p: Point = Point { x: 3.0, y: 4.0 };
+let len: float = p.length();
+print(f"Length: {len}");
+```
+
+- Methods use `self` as the first parameter (no explicit type annotation needed).
+- Methods are compiled as `TypeName_method_name(self, ...)` in the generated C code.
+
+## 26. Traits
+
+Traits define shared behavior as a set of method signatures:
+
+```
+trait Display {
+    fn to_string(self): str;
+}
+```
+
+### Implementing Traits
+
+```
+impl Display for Point {
+    fn to_string(self): str {
+        return f"Point({self.x}, {self.y})";
+    }
+}
+```
+
+- Trait methods use `self` as the first parameter.
+- A type can implement multiple traits.
+- Trait implementations are checked for completeness (all methods must be defined).
+
+## 27. Closures / Lambdas
+
+Anonymous functions using pipe `|` syntax:
+
+```
+let twice: fn(int): int = |n: int|: int {
+    return n * 2;
+};
+```
+
+### Function Types
+
+Closure and function types are written as `fn(param_types): return_type`:
+
+```
+let add_one: fn(int): int = |x: int|: int {
+    return x + 1;
+};
+```
+
+### Higher-Order Functions
+
+Functions can accept and return function values:
+
+```
+fn apply(f: fn(int): int, x: int): int {
+    return f(x);
+}
+
+let result: int = apply(add_one, 10);  // 11
+```
+
+Named functions can also be passed as values:
+
+```
+fn double(x: int): int {
+    return x * 2;
+}
+
+let r: int = apply(double, 5);  // 10
+```
+
+## 28. Async / Await
+
+Functions can be declared `async` to run concurrently:
+
+```
+async fn compute(x: int): int {
+    return x * x;
+}
+
+async fn greet(name: str): str {
+    return "Hello, " + name + "!";
+}
+```
+
+### Using Futures
+
+Calling an async function returns a future. Use `await` to block and retrieve the result:
+
+```
+fn main(): void {
+    let fut1 = compute(7);
+    let fut2 = compute(3);
+
+    let r1: int = await fut1;
+    let r2: int = await fut2;
+
+    print(f"{r1}, {r2}");  // 49, 9
+}
+```
+
+- Async functions run on separate threads.
+- `await` blocks until the future completes and returns its value.
+- Platform-aware: uses Windows threads (`_beginthreadex`) or pthreads.
+
+## 29. Package Manager
+
+URUS includes a built-in package manager using `urus.toml` manifests.
+
+### Manifest (`urus.toml`)
+
+```toml
+[package]
+name = "my_project"
+version = "0.1.0"
+
+[dependencies]
+math = "*"
+http = "https://github.com/user/http-lib.git"
+json = "0.2.0"
+```
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `urusc pkg init` | Create new project with `urus.toml` and `src/main.urus` |
+| `urusc pkg add <name> [version]` | Add dependency (version defaults to `"*"`) |
+| `urusc pkg install` | Resolve and install dependencies |
+| `urusc pkg list` | Show project info and dependencies |
+
+### Dependency Resolution
+
+- Dependencies named matching stdlib modules (e.g., `math`, `json`) resolve to the built-in standard library.
+- Git URLs are cloned into the `urus_modules/` directory.
+- A lock file (`urus.lock`) is generated after install.
+
+## 30. Standard Library
+
+The standard library provides importable modules in `compiler/stdlib/`. Import with:
+
+```
+import "math.urus";
+import "json.urus";
+```
+
+### `math.urus`
+
+Constants:
+
+| Constant | Value |
+|----------|-------|
+| `MATH_PI` | 3.14159265358979323846 |
+| `MATH_E` | 2.71828182845904523536 |
+| `MATH_TAU` | 6.28318530717958647692 |
+
+Trigonometry:
+
+| Function | Description |
+|----------|-------------|
+| `math_sin(x)` | Sine |
+| `math_cos(x)` | Cosine |
+| `math_tan(x)` | Tangent |
+| `math_asin(x)` | Arc sine |
+| `math_acos(x)` | Arc cosine |
+| `math_atan(x)` | Arc tangent |
+| `math_atan2(y, x)` | Two-argument arc tangent |
+
+Logarithms:
+
+| Function | Description |
+|----------|-------------|
+| `math_log(x)` | Natural logarithm |
+| `math_log2(x)` | Base-2 logarithm |
+| `math_log10(x)` | Base-10 logarithm |
+
+Rounding:
+
+| Function | Description |
+|----------|-------------|
+| `math_ceil(x)` | Ceiling |
+| `math_floor(x)` | Floor |
+| `math_round(x)` | Round to nearest |
+
+Utility:
+
+| Function | Description |
+|----------|-------------|
+| `math_clamp(val, lo, hi)` | Clamp value to range |
+| `math_sign(x)` | Sign (-1, 0, or 1) |
+| `math_lerp(a, b, t)` | Linear interpolation |
+| `math_random_int(min, max)` | Random integer in range |
+| `math_random_float()` | Random float in [0, 1] |
+
+Number Theory:
+
+| Function | Description |
+|----------|-------------|
+| `math_factorial(n)` | Factorial (iterative) |
+| `math_gcd(a, b)` | Greatest common divisor |
+| `math_lcm(a, b)` | Least common multiple |
+| `math_fibonacci(n)` | N-th Fibonacci number |
+| `math_is_prime(n)` | Primality test |
+| `math_comb(n, k)` | Combination C(n, k) |
+| `math_perm(n, k)` | Permutation P(n, k) |
+
+Statistics:
+
+| Function | Description |
+|----------|-------------|
+| `math_sum(values)` | Sum of float array |
+| `math_mean(values)` | Mean of float array |
+
+Numerical Calculus:
+
+| Function | Description |
+|----------|-------------|
+| `math_derivative(f_plus, f_minus, h)` | First derivative (central difference) |
+| `math_derivative2(f_plus, f_center, f_minus, h)` | Second derivative |
+| `math_integrate_trapezoid(values, h)` | Trapezoidal integration |
+| `math_integrate_simpson(values, h)` | Simpson's 1/3 rule integration |
+
+### `string.urus`
+
+Extended string utilities beyond the built-in string functions.
+
+### `fs.urus`
+
+File system operations beyond the built-in `read_file`/`write_file`.
+
+### `json.urus`
+
+JSON parsing and serialization.
+
+### `os.urus`
+
+Operating system utilities (environment variables, process execution).
+
+### `http.urus`
+
+Extended HTTP client functionality beyond the built-in `http_get`/`http_post`.
+
 ---
 
 ## Grammar (EBNF)
@@ -636,9 +953,11 @@ program        = { declaration } ;
 
 declaration    = fn_decl | struct_decl | enum_decl | import_decl
                | const_decl | type_alias | rune_decl | emit_stmt
+               | trait_decl | impl_block
                | statement ;
 
-fn_decl        = "fn" IDENT "(" param_list ")" [ ":" type ] block ;
+fn_decl        = [ "async" ] "fn" IDENT [ generic_params ] "(" param_list ")" [ ":" type ] block ;
+generic_params = "<" IDENT { "," IDENT } ">" ;
 param_list     = [ param { "," param } ] ;
 param          = [ "mut" ] IDENT ":" type [ "=" expr ] ;
 
@@ -647,6 +966,11 @@ field          = IDENT ":" type ";" ;
 
 enum_decl      = "enum" IDENT "{" { variant } "}" ;
 variant        = IDENT [ "(" param_list ")" ] ";" ;
+
+trait_decl     = "trait" IDENT "{" { trait_method } "}" ;
+trait_method   = "fn" IDENT "(" param_list ")" [ ":" type ] ";" ;
+
+impl_block     = "impl" IDENT [ "for" IDENT ] "{" { fn_decl } "}" ;
 
 import_decl    = "import" STR_LIT ";" ;
 
@@ -671,6 +995,7 @@ statement      = let_stmt
                | continue_stmt
                | match_stmt
                | defer_stmt
+               | try_catch_stmt
                | expr_stmt ;
 
 let_stmt       = "let" [ "mut" ] ( IDENT | "(" ident_list ")" )
@@ -689,6 +1014,7 @@ return_stmt    = "return" [ expr ] ";" ;
 break_stmt     = "break" ";" ;
 continue_stmt  = "continue" ";" ;
 defer_stmt     = "defer" block ;
+try_catch_stmt = "try" block "catch" "(" IDENT ":" type ")" block ;
 
 match_stmt     = "match" expr "{" { match_arm } "}" ;
 match_arm      = pattern "=>" block ;
@@ -714,7 +1040,7 @@ multiplication = exponent { ( "*" | "/" | "%" | "%%" ) exponent } ;
 exponent       = unary { "**" unary } ;
 unary          = ( "!" | "-" | "~" | "++" | "--" ) unary
                | postfix ;
-postfix        = call { "++" | "--" } ;
+postfix        = call { "++" | "--" | "?" } ;
 call           = primary { "(" arg_list ")" | "." IDENT [ "(" arg_list ")" ]
                  | "[" expr "]" } ;
 arg_list       = [ expr { "," expr } ] ;
@@ -723,13 +1049,19 @@ primary        = INT_LIT | FLOAT_LIT | STR_LIT | FSTR_LIT
                | "true" | "false"
                | "Ok" "(" expr ")"
                | "Err" "(" expr ")"
+               | "await" expr
                | IDENT "!" "(" arg_list ")"
                | IDENT
                | IDENT "{" field_init_list [ "," ".." expr ] "}"
                | IDENT "." IDENT [ "(" arg_list ")" ]
                | "[" [ expr { "," expr } ] "]"
                | "(" expr { "," expr } ")"
-               | "(" expr ")" ;
+               | "(" expr ")"
+               | lambda_expr ;
+
+lambda_expr    = "|" [ lambda_param { "," lambda_param } ] "|"
+                 [ ":" type ] block ;
+lambda_param   = IDENT ":" type ;
 
 FSTR_LIT       = "f" '"' { any_char | "{" expr "}" } '"' ;
 
@@ -740,7 +1072,8 @@ type           = "int" | "float" | "bool" | "str" | "void"
                | "[" type "]"
                | "(" type { "," type } ")"
                | "Result" "<" type "," type ">"
-               | IDENT ;
+               | "fn" "(" [ type { "," type } ] ")" [ ":" type ]
+               | IDENT [ "<" type { "," type } ">" ] ;
 
 (* Numeric Literals *)
 INT_LIT        = DIGIT { DIGIT | "_" }
@@ -768,13 +1101,26 @@ struct Circle {
     radius: float;
 }
 
-fn area(c: Circle): float {
-    return 3.14159 * c.radius * c.radius;
+impl Circle {
+    fn area(self): float {
+        return 3.14159 * self.radius * self.radius;
+    }
+}
+
+trait Display {
+    fn to_string(self): str;
+}
+
+impl Display for Circle {
+    fn to_string(self): str {
+        return f"Circle(radius={self.radius})";
+    }
 }
 
 fn main(): void {
     let c: Circle = Circle { radius: 5.0 };
-    print(f"Area: {area(c)}");
+    print(f"Area: {c.area()}");
+    print(c.to_string());
 
     let mut sum: int = 0;
     for i in 1..=100 {
@@ -797,12 +1143,8 @@ fn main(): void {
 
 These are deferred to future versions:
 
-- Generics / templates
-- Closures / lambdas
-- Interfaces / traits
-- Methods on structs (`impl` blocks)
 - Optional type (`Option<T>`)
 - Cycle detection in refcount
 - Pointer/unsafe operations
-- Async/await
-- Package manager
+- Generic structs / generic traits
+- Trait bounds on generic parameters

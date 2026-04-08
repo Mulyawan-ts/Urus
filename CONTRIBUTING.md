@@ -18,7 +18,7 @@ Thank you for your interest in contributing to URUS! This guide will help you ge
    ```
 4. **Run tests** to make sure everything works:
    ```bash
-    cd compiler/build    # Make sure you're in the build directories
+    cd compiler/build    # Make sure you're in the build directory
     ctest               # Run all tests
    ```
 
@@ -57,7 +57,7 @@ Thank you for your interest in contributing to URUS! This guide will help you ge
 
 4. **Run the test suite:**
    ```bash
-    cd compiler/build    # Make sure you're in the build directories
+    cd compiler/build    # Make sure you're in the build directory
     ctest               # Run all tests
    ```
 
@@ -135,6 +135,16 @@ If you're adding a new language feature, follow this checklist:
 8. `tests/run/` — Add test cases (`.urus` + `.expected`)
 9. `SPEC.md` — Update language spec
 10. `examples/` — Add example program
+
+### Adding a Standard Library Module
+
+Standard library modules live in `compiler/stdlib/` as `.urus` files:
+
+1. `compiler/stdlib/your_module.urus` — Implement the module
+2. Use `__emit__()` for C-level bindings when needed
+3. Prefix all exported functions with the module name (e.g., `math_sin`, `json_parse`)
+4. Add test cases in `tests/run/`
+5. Document in `SPEC.md` under the Standard Library section
 
 ## Pull Request Guidelines
 

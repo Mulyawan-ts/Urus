@@ -1,0 +1,46 @@
+import math;
+
+fn main(): void {
+    // Numerical derivative: f(x) = x^2, f'(x) = 2x at x=3
+    // f(3+h) = 3.001^2 = 9.006001, f(3-h) = 2.999^2 = 8.994001
+    let h: float = 0.001;
+    let deriv: float = math_derivative(3.001 ** 2.0, 2.999 ** 2.0, h);
+    print(math_round(deriv));
+
+    // Second derivative: f(x) = x^2, f''(x) = 2
+    let d2: float = math_derivative2(3.001 ** 2.0, 3.0 ** 2.0, 2.999 ** 2.0, h);
+    print(math_round(d2));
+
+    // Integration: ∫0→1 x^2 dx = 1/3 ≈ 0.333...
+    // Using 5 points: [0, 0.0625, 0.25, 0.5625, 1.0] at h=0.25
+    let mut vals: [float] = [0.0, 0.0625, 0.25, 0.5625, 1.0];
+    let trap: float = math_integrate_trapezoid(vals, 0.25);
+    print(math_round(trap * 1000.0) / 1000.0);
+
+    let simp: float = math_integrate_simpson(vals, 0.25);
+    print(math_round(simp * 1000.0) / 1000.0);
+
+    // Factorial
+    print(math_factorial(5));
+    print(math_factorial(0));
+
+    // GCD / LCM
+    print(math_gcd(12, 8));
+    print(math_lcm(4, 6));
+
+    // Fibonacci
+    print(math_fibonacci(10));
+
+    // Prime check
+    print(math_is_prime(7));
+    print(math_is_prime(10));
+
+    // Combinations and permutations
+    print(math_comb(5, 2));
+    print(math_perm(5, 2));
+
+    // Sum and mean
+    let data: [float] = [1.0, 2.0, 3.0, 4.0, 5.0];
+    print(math_sum(data));
+    print(math_mean(data));
+}
