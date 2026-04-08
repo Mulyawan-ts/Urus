@@ -42,6 +42,7 @@ typedef enum {
     TOK_IMPL,
     TOK_ASYNC,
     TOK_AWAIT,
+    TOK_TEST,
     TOK_TRY,
     TOK_CATCH,
 
