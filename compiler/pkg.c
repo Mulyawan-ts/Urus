@@ -5,6 +5,7 @@
  * and project scaffolding.
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,11 +14,102 @@
 
 #ifdef _WIN32
 #include <direct.h>
+#include <process.h>
 #define mkdir_p(path) _mkdir(path)
 #else
+#include <sys/wait.h>
 #include <unistd.h>
 #define mkdir_p(path) mkdir(path, 0755)
 #endif
+
+// ---- Safe git invocation (no shell) ----
+
+// Validate a dependency URL/spec before passing it to git clone as an
+// argv element. We never pass these strings through /bin/sh, but we still
+// want to reject anything that looks like an attempt to smuggle git
+// command-line options or paths with embedded control characters.
+//
+// Allowed shapes:
+//   - https://host/path[.git]
+//   - http://host/path[.git]
+//   - git://host/path[.git]
+//   - ssh://user@host/path[.git]
+//   - git@host:owner/repo[.git]
+//
+// Characters allowed inside: ASCII letters, digits, and a small set of URL
+// punctuation (./-_:@/+~=&%). Everything else (whitespace, quotes, ;, |, &
+// outside the allowed set, $, `, backslash, control chars, non-ASCII) is
+// rejected. We also reject anything starting with '-' so the value can't be
+// misinterpreted as a git option even if argv handling were ever bypassed.
+static bool pkg_validate_remote_url(const char *url) {
+    if (!url || !*url) return false;
+    if (url[0] == '-') return false;
+
+    // Must start with one of the known schemes.
+    static const char *const schemes[] = {
+        "https://", "http://", "git://", "ssh://", NULL
+    };
+    bool scheme_ok = false;
+    for (int i = 0; schemes[i]; i++) {
+        size_t n = strlen(schemes[i]);
+        if (strncmp(url, schemes[i], n) == 0 && url[n] != '\0') {
+            scheme_ok = true;
+            break;
+        }
+    }
+    // ...or scp-style: user@host:path  (the '@' must precede the ':')
+    if (!scheme_ok) {
+        const char *at = strchr(url, '@');
+        const char *colon = strchr(url, ':');
+        if (at && colon && at < colon && at != url && colon[1] != '\0') {
+            scheme_ok = true;
+        }
+    }
+    if (!scheme_ok) return false;
+
+    // Whitelist on every character.
+    for (const char *p = url; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (c < 0x20 || c == 0x7f) return false;          // control chars
+        if (c >= 0x80) return false;                       // non-ASCII
+        if (isalnum(c)) continue;
+        switch (c) {
+        case '.': case '/': case '-': case '_': case ':':
+        case '@': case '+': case '~': case '=': case '%':
+            continue;
+        default:
+            return false;
+        }
+    }
+    return true;
+}
+
+// Run `git clone --depth 1 <url> <dest>` without going through a shell.
+// Returns 0 on success, non-zero on failure. The arguments are passed as
+// argv to execvp / _spawnvp so shell metacharacters in `url` or `dest`
+// cannot be interpreted.
+static int pkg_run_git_clone(const char *url, const char *dest) {
+#ifdef _WIN32
+    const char *argv[] = {
+        "git", "clone", "--depth", "1", url, dest, NULL
+    };
+    // _spawnvp returns the child's exit code on success, -1 on failure.
+    intptr_t rc = _spawnvp(_P_WAIT, "git", argv);
+    return rc == -1 ? -1 : (int)rc;
+#else
+    pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid == 0) {
+        execlp("git", "git", "clone", "--depth", "1",
+               url, dest, (char *)NULL);
+        _exit(127);
+    }
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) return -1;
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    return -1;
+#endif
+}
 
 // ---- TOML-like parser (minimal subset for urus.toml) ----
 
@@ -305,10 +397,11 @@ static int pkg_install(void) {
 
         printf("  Installing %s@%s...", dep, ver);
 
-        // Check if it's a git dependency (starts with http/git)
-        if (strncmp(ver, "http", 4) == 0 || strncmp(ver, "git@", 4) == 0) {
-            // Git clone
-            char cmd[1024];
+        // Check if it's a git dependency (starts with http/git).
+        if (strncmp(ver, "http", 4) == 0 ||
+            strncmp(ver, "git://", 6) == 0 ||
+            strncmp(ver, "ssh://", 6) == 0 ||
+            strncmp(ver, "git@", 4) == 0) {
             char dest[256];
             snprintf(dest, sizeof(dest), "urus_modules/%s", dep);
             if (file_exists(dest)) {
@@ -316,11 +409,26 @@ static int pkg_install(void) {
                 installed++;
                 continue;
             }
-            snprintf(cmd, sizeof(cmd), "git clone --depth 1 %s %s 2>&1", ver, dest);
-            int ret = system(cmd);
+            // Reject anything that doesn't look like a plain URL/scp-spec.
+            // This prevents a malicious urus.toml from smuggling shell
+            // metacharacters or git options through the dependency value.
+            if (!pkg_validate_remote_url(ver)) {
+                printf(" REJECTED\n");
+                fprintf(stderr,
+                        "  Error: dependency '%s' has an unsafe or unsupported "
+                        "URL form: %s\n", dep, ver);
+                continue;
+            }
+            // Run git clone *without* a shell. Even if `ver` somehow
+            // contained shell metacharacters (it cannot, after the
+            // validator above), they would be passed as a single argv
+            // element to git, not interpreted by /bin/sh.
+            int ret = pkg_run_git_clone(ver, dest);
             if (ret != 0) {
                 printf(" FAILED\n");
-                fprintf(stderr, "  Error: git clone failed for %s\n", dep);
+                fprintf(stderr,
+                        "  Error: git clone failed for %s (exit %d)\n",
+                        dep, ret);
             } else {
                 printf(" ok\n");
                 installed++;
