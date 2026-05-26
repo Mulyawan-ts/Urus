@@ -38,6 +38,14 @@ the previous version numbers.
   URL/scp-spec whitelist and passed as an `argv` element to
   `fork`/`execvp` (POSIX) or `_spawnvp` (Windows), with no shell in the
   loop. Values that fail validation are rejected with a clear error.
+- **LSP:** rewrote `uri_to_path` in `compiler/lsp.c`. The previous
+  implementation used `strcpy()` and read `p[1]`, `p[2]`, and `p+4`
+  without first checking that the URI suffix actually had that many
+  bytes — a truncated `file:///C` URI from a misbehaving editor would
+  read one past the end of the string. `malloc` returns were also not
+  null-checked. The new version validates every offset it reads,
+  copies with explicit lengths via `memcpy`, and propagates allocation
+  failures back to the caller.
 - (more entries will land here as the foundation PRs merge)
 
 ---

@@ -219,27 +219,62 @@ static void doc_close(const char *uri)
 // URI to path conversion
 // ============================================================
 
+// Convert an LSP-style file URI to an absolute filesystem path.
+//
+// Accepted shapes (case-insensitive on the scheme):
+//   file:///path                  -> "/path"
+//   file:///C:/path               -> "C:/path"           (Windows)
+//   file:///C%3A/path             -> "C:/path"           (Windows, percent-encoded ':')
+//
+// Anything that doesn't start with "file:///" is duplicated verbatim — the
+// LSP spec allows other schemes (e.g. "untitled:") which the caller will
+// handle by failing the read.
+//
+// The previous implementation used strcpy() and indexed p[1]/p[2]/p+4
+// without first checking that the URI actually had that many bytes. A
+// truncated URI like "file:///C" would dereference one past the end of
+// the string. malloc returns were also not NULL-checked. All of that is
+// fixed here: we measure the suffix once, validate every offset we read,
+// and use memcpy with explicit lengths so the destination buffer can
+// never be overrun.
 static char *uri_to_path(const char *uri)
 {
-    // file:///path or file:///C:/path
-    if (strncmp(uri, "file:///", 8) != 0) return strdup(uri);
-    const char *p = uri + 8;
+    if (!uri) return NULL;
+
+    static const char kPrefix[] = "file:///";
+    static const size_t kPrefixLen = sizeof(kPrefix) - 1; // 8
+
+    if (strncmp(uri, kPrefix, kPrefixLen) != 0) return strdup(uri);
+
+    const char *p = uri + kPrefixLen;
+    size_t plen = strlen(p);
+
 #ifdef _WIN32
-    // file:///C:/path -> C:/path
-    if (p[0] && p[1] == ':') return strdup(p);
-    // file:///C%3A/path
-    if (p[0] && p[1] == '%' && p[2] == '3') {
-        char *r = (char *)malloc(strlen(p) + 1);
+    // file:///C:/path -> C:/path  (need at least drive letter + ':')
+    if (plen >= 2 && p[1] == ':') {
+        return strdup(p);
+    }
+    // file:///C%3A/path -> C:/path  (need 'X', '%', '3', 'A'/'a' + the rest)
+    if (plen >= 4 && p[1] == '%' && p[2] == '3' &&
+        (p[3] == 'A' || p[3] == 'a')) {
+        // Result is: drive letter, ':', and (plen - 4) bytes from p+4,
+        // plus a NUL terminator.
+        size_t tail = plen - 4;
+        char *r = (char *)malloc(2 + tail + 1);
+        if (!r) return NULL;
         r[0] = p[0];
         r[1] = ':';
-        strcpy(r + 2, p + 4);
+        memcpy(r + 2, p + 4, tail);
+        r[2 + tail] = '\0';
         return r;
     }
 #endif
-    // Unix: file:///path -> /path
-    char *r = (char *)malloc(strlen(p) + 2);
+    // Unix-style: file:///path -> /path. Allocate plen + 2 ('/' + payload + NUL).
+    char *r = (char *)malloc(plen + 2);
+    if (!r) return NULL;
     r[0] = '/';
-    strcpy(r + 1, p);
+    memcpy(r + 1, p, plen);
+    r[1 + plen] = '\0';
     return r;
 }
 
