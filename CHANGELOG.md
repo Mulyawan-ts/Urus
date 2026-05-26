@@ -22,6 +22,13 @@ the previous version numbers.
 ### Foundation work (this release, in progress)
 - Version reset from 0.3.0 → 0.1.0
 - Comprehensive compiler audit; tracking issues by severity
+- **Build:** fixed a parallel-build race in `compiler/CMakeLists.txt`. The
+  embedded-runtime generator (`urus_runtime.c`) was attached to two
+  executables and could be invoked twice concurrently under `make -j`,
+  occasionally emitting a duplicate `urus_runtime_header_data_len`
+  definition and breaking the link. The generated file is now compiled
+  through a single `OBJECT` library and linked into both `urusc` and
+  `urusc-lsp`, so the generator runs exactly once.
 - (more entries will land here as the foundation PRs merge)
 
 ---

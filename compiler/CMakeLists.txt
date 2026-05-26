@@ -17,6 +17,20 @@ endif()
 set(URUS_RUNTIME_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/runtime/urus_runtime.h")
 set(URUS_RUNTIME_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/urus_runtime.c")
 
+# Generate the embedded runtime exactly once per build.
+#
+# Previously, urus_runtime.c was listed directly in the source lists of both
+# the `urusc` and `urusc-lsp` executables. CMake then attached the
+# add_custom_command that generates the file to *both* targets, and parallel
+# `make -j` builds invoked the embed-string.cmake script twice concurrently.
+# Because the script does file(WRITE ...) followed by file(APPEND ...), a
+# losing-the-race second writer could observe the post-WRITE / pre-APPEND
+# state and end up appending the *_len line a second time, producing a file
+# with two `urus_runtime_header_data_len` definitions and breaking the link.
+#
+# Fix: compile urus_runtime.c into an OBJECT library and have each executable
+# depend on the resulting object. The custom command is attached to exactly
+# one target, so the generator runs exactly once even under -j.
 add_custom_command(
     OUTPUT "${URUS_RUNTIME_EMBEDDED}"
     COMMAND ${CMAKE_COMMAND}
@@ -24,8 +38,11 @@ add_custom_command(
             -DOUTPUT_FILE=${URUS_RUNTIME_EMBEDDED}
             -DVARIABLE_NAME=urus_runtime_header_data
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-string.cmake"
-    DEPENDS "${URUS_RUNTIME_H}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-string.cmake"
+    DEPENDS "${URUS_RUNTIME_HEADER}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-string.cmake"
+    VERBATIM
 )
+
+add_library(urus_runtime_obj OBJECT "${URUS_RUNTIME_EMBEDDED}")
 
 # source
 set(SOURCES
@@ -42,7 +59,7 @@ set(SOURCES
     pkg.c
 )
 
-add_executable(urusc ${SOURCES} ${URUS_RUNTIME_EMBEDDED})
+add_executable(urusc ${SOURCES} $<TARGET_OBJECTS:urus_runtime_obj>)
 
 target_include_directories(urusc PRIVATE "${CMAKE_CURRENT_BINARY_DIR}") # -I<BUILD DIRECTORIES> (example for config.h by config.h.in)
 
@@ -57,7 +74,7 @@ set(LSP_SHARED_SOURCES
     builtins.c
     preprocess.c
 )
-add_executable(urusc-lsp lsp.c ${LSP_SHARED_SOURCES} ${URUS_RUNTIME_EMBEDDED})
+add_executable(urusc-lsp lsp.c ${LSP_SHARED_SOURCES} $<TARGET_OBJECTS:urus_runtime_obj>)
 target_include_directories(urusc-lsp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
 install(TARGETS urusc-lsp DESTINATION bin)
 
