@@ -1,4 +1,4 @@
-# URUS Language Specification v0.3.0
+# URUS Language Specification v0.1.0
 
 URUS is a statically-typed, compiled programming language that transpiles to standard C11. Memory is managed automatically via reference counting.
 

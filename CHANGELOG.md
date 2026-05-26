@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.1.0 — Foundation Reset (in progress)
+
+**Version reset.** The previous 0.2.x / 0.3.x line accumulated features faster
+than the foundation could absorb them — type system gaps, security holes in the
+package manager, broken RAII on MSVC, hardcoded limits that silently dropped
+declarations, and a parser without real error recovery. We are renumbering to
+0.1.0 to signal that the language is now in its **foundation-hardening phase**
+and that no API or syntax is stable until 1.0.
+
+The features delivered in the previous 0.2/0.3 releases are kept (tuples,
+runes, pattern matching, type inference, defer, constants, type aliases,
+bitwise operators, do-while, methods, raw emit, error handling v2, package
+manager, LSP, WASM target, testing framework, stdlib modules). What changes is
+the **commitment**: each subsystem is being re-audited, security-hardened,
+de-magic-numbered, and documented before any new feature is added.
+
+See `documentation/changelog/version-history.md` for the historical record of
+the previous version numbers.
+
+### Foundation work (this release, in progress)
+- Version reset from 0.3.0 → 0.1.0
+- Comprehensive compiler audit; tracking issues by severity
+- **Build:** fixed a parallel-build race in `compiler/CMakeLists.txt`. The
+  embedded-runtime generator (`urus_runtime.c`) was attached to two
+  executables and could be invoked twice concurrently under `make -j`,
+  occasionally emitting a duplicate `urus_runtime_header_data_len`
+  definition and breaking the link. The generated file is now compiled
+  through a single `OBJECT` library and linked into both `urusc` and
+  `urusc-lsp`, so the generator runs exactly once.
+- (more entries will land here as the foundation PRs merge)
+
+---
+
+## Pre-reset history (formerly 0.3.0 and earlier)
+
+The entries below are preserved for historical context. They describe features
+that ship in 0.1.0 — the version numbering changed, the code did not.
+
 ## Unreleased (since V0.3.0)
 
 ### New Features

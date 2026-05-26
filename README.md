@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Termux-lightgrey" alt="Platform" />
   <img src="https://img.shields.io/badge/C-C11-orange" alt="C Standard" />
@@ -481,7 +481,7 @@ fn main(): void {
 ## CLI Usage
 
 ```
-URUS Compiler, version 0.3.0
+URUS Compiler, version 0.1.0
 
 Usage: urusc <file.urus> [options]
 
@@ -570,7 +570,7 @@ Urus/
 
 | Metric | Value |
 |--------|-------|
-| Version | 0.3.0 |
+| Version | 0.1.0 |
 | Compiler LOC | ~7,100+ |
 | Runtime LOC | ~540 |
 | Test files | 33 |
