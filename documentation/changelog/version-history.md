@@ -2,9 +2,27 @@
 
 This is a summary of each release. For the detailed changelog with every commit, bug fix, and contributor credit, see [CHANGELOG.md](../../CHANGELOG.md) in the project root.
 
+> **Note on the version reset:** The project was renumbered from `0.3.0` back
+> to `0.1.0` in May 2026 to signal that the language is in foundation-hardening
+> phase. No code was lost — only the version number was reset. The historical
+> entries below (0.3.0, 0.2.x, etc.) are preserved as a record of feature
+> introduction order, but the current shipping version is `0.1.0`.
+
 ---
 
-## 0.3.x — Current (March 2026)
+## 0.1.0 — Foundation Reset (May 2026)
+
+The features cataloged below (under 0.3.x and earlier) all ship in this
+release; the renumbering is about commitment, not contents. Active work is
+focused on security hardening, removing hardcoded limits, fixing the broken
+MSVC RAII story, real parser error recovery, and a proper module/IR layer
+before any new language feature lands.
+
+See the [project roadmap](../roadmap/project-roadmap.md) for the path to 1.0.
+
+---
+
+## 0.3.x — Pre-reset (March 2026)
 
 Post-0.3.0 additions:
 
