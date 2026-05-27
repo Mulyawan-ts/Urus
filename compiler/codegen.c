@@ -56,9 +56,25 @@ typedef struct {
     AstNode *fn_node;        // original AST node
 } MonoInstance;
 
-#define MAX_MONO 256
-static MonoInstance mono_instances[MAX_MONO];
+// Generic-monomorphization registry. Grows on demand; the previous
+// MAX_MONO=256 cap silently exited the compiler with exit(1) past the
+// limit, which is impossible to hit cleanly from real generic-heavy
+// code without losing user data.
+static MonoInstance *mono_instances = NULL;
 static int mono_count = 0;
+static int mono_cap = 0;
+
+static void mono_reserve(int needed)
+{
+    if (needed <= mono_cap)
+        return;
+    int new_cap = mono_cap == 0 ? 16 : mono_cap;
+    while (new_cap < needed)
+        new_cap *= 2;
+    mono_instances = xrealloc(mono_instances,
+                              sizeof(*mono_instances) * (size_t)new_cap);
+    mono_cap = new_cap;
+}
 
 // Build a mangled name for a generic function instantiation
 static char *mono_mangle_name(const char *fn_name, AstType **type_args,
@@ -99,12 +115,8 @@ static const char *mono_get_or_add(const char *fn_name, AstType **type_args,
             if (match) return mono_instances[i].mangled_name;
         }
     }
-    // Add new
-    if (mono_count >= MAX_MONO) {
-        fprintf(stderr, "Error: too many generic instantiations (max %d)\n",
-                MAX_MONO);
-        exit(1);
-    }
+    // Add new — table grows on demand, no hard cap.
+    mono_reserve(mono_count + 1);
     MonoInstance *m = &mono_instances[mono_count++];
     m->fn_name = strdup(fn_name);
     m->type_args = type_args;
@@ -134,16 +146,32 @@ static bool _codegen_test_mode = false;
 
 // ---- Lambda tracking ----
 
-#define MAX_LAMBDAS 256
-static AstNode *lambda_nodes[MAX_LAMBDAS];
+// Dynamic lambda registry. The previous MAX_LAMBDAS=256 cap *silently*
+// dropped any lambda past the limit, producing a working but
+// quietly-truncated binary. That's strictly worse than crashing, so we
+// grow on demand.
+static AstNode **lambda_nodes = NULL;
 static int lambda_count = 0;
+static int lambda_cap = 0;
+
+static void lambda_reserve(int needed)
+{
+    if (needed <= lambda_cap)
+        return;
+    int new_cap = lambda_cap == 0 ? 16 : lambda_cap;
+    while (new_cap < needed)
+        new_cap *= 2;
+    lambda_nodes = xrealloc(lambda_nodes,
+                            sizeof(*lambda_nodes) * (size_t)new_cap);
+    lambda_cap = new_cap;
+}
 
 static void collect_lambdas(AstNode *node)
 {
     if (!node) return;
     if (node->kind == NODE_LAMBDA) {
-        if (lambda_count < MAX_LAMBDAS)
-            lambda_nodes[lambda_count++] = node;
+        lambda_reserve(lambda_count + 1);
+        lambda_nodes[lambda_count++] = node;
         // Also collect from lambda body
         collect_lambdas(node->as.lambda.body);
         return;
@@ -235,6 +263,14 @@ static void gen_lambda_fn(CodeBuf *buf, AstNode *node)
 static bool tuple_needs_drop(AstType *t);
 static bool type_needs_drop(AstType *t);
 
+// Build the C identifier for a tuple type. Returns a pointer into a static
+// buffer — callers that need to keep the name across another tuple_type_name
+// call must strdup() it.
+//
+// TODO(foundation): the 512-byte buffer can be exceeded by deeply nested
+// generic-of-tuple-of-... types; we currently exit(1). A subsequent PR
+// will switch this to a growable string builder and a return value the
+// caller owns.
 static const char *tuple_type_name(AstType *t)
 {
     static char buf[512];
@@ -260,9 +296,24 @@ static const char *tuple_type_name(AstType *t)
     return buf;
 }
 
-#define MAX_TUPLE_TYPES 64
-static char *tuple_typedefs[MAX_TUPLE_TYPES];
+// Dynamic registry of emitted tuple typedef names. The previous
+// MAX_TUPLE_TYPES=64 cap silently overflowed: tuple_typedefs[64++] writes
+// past the array. The table now grows on demand.
+static char **tuple_typedefs = NULL;
 static int tuple_typedef_count = 0;
+static int tuple_typedef_cap = 0;
+
+static void tuple_typedef_reserve(int needed)
+{
+    if (needed <= tuple_typedef_cap)
+        return;
+    int new_cap = tuple_typedef_cap == 0 ? 16 : tuple_typedef_cap;
+    while (new_cap < needed)
+        new_cap *= 2;
+    tuple_typedefs = xrealloc(tuple_typedefs,
+                              sizeof(*tuple_typedefs) * (size_t)new_cap);
+    tuple_typedef_cap = new_cap;
+}
 
 static bool tuple_typedef_exists(const char *name)
 {
@@ -285,6 +336,7 @@ static void emit_single_tuple_typedef(CodeBuf *buf, AstType *t)
             emit_single_tuple_typedef(buf, t->element_types[i]);
         }
     }
+    tuple_typedef_reserve(tuple_typedef_count + 1);
     tuple_typedefs[tuple_typedef_count++] = strdup(name);
     emit(buf, "typedef struct { ");
     for (int i = 0; i < t->element_count; i++) {

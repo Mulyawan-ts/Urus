@@ -46,6 +46,20 @@ the previous version numbers.
   null-checked. The new version validates every offset it reads,
   copies with explicit lengths via `memcpy`, and propagates allocation
   failures back to the caller.
+- **Dynamic limits:** removed five hardcoded `MAX_*` caps that silently
+  dropped or rejected declarations once exceeded. All five tables now
+  grow on demand:
+  - `MAX_IMPORTS=64` (preprocess.c) — capped the module graph
+  - `MAX_RUNES=64` (parser.c) — capped registered macros
+  - `MAX_MONO=256` (codegen.c) — capped generic instantiations; exited
+    the compiler past the cap, losing user work
+  - `MAX_LAMBDAS=256` (codegen.c) — *silently* dropped lambdas past the
+    cap, producing a quietly-truncated binary
+  - `MAX_TUPLE_TYPES=64` (codegen.c) — wrote past a fixed array on
+    overflow
+  Each registry now uses an `xrealloc`-backed grow-by-2 scheme starting
+  at 16. The `tuple_type_name` 512-byte static-buffer issue is tagged
+  with a `TODO(foundation)` and tracked separately.
 - (more entries will land here as the foundation PRs merge)
 
 ---

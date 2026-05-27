@@ -23,10 +23,28 @@
 
 // --- Import resolution ---
 
-// Track imported files to detect circular imports
-#define MAX_IMPORTS 64
-static const char *imported_files[MAX_IMPORTS];
+// Track imported files to dedupe imports. The list grows as needed; the
+// previous hardcoded MAX_IMPORTS=64 cap was a silent ceiling on real
+// projects' module graphs.
+//
+// Entries are not owned by this table — some come from the caller
+// (base_file) and some are heap-allocated by resolve_*_path and freed
+// elsewhere — so this table itself never frees its entries.
+static char **imported_files = NULL;
 static int import_count = 0;
+static int import_cap = 0;
+
+static void imports_reserve(int needed)
+{
+    if (needed <= import_cap)
+        return;
+    int new_cap = import_cap == 0 ? 16 : import_cap;
+    while (new_cap < needed)
+        new_cap *= 2;
+    imported_files = xrealloc(imported_files,
+                              sizeof(*imported_files) * (size_t)new_cap);
+    import_cap = new_cap;
+}
 
 static bool already_imported(const char *path)
 {
@@ -143,13 +161,10 @@ static char *resolve_import_path(const char *base_file, const char *import_path)
 
 bool preprocess_imports(AstNode *program, const char *base_file)
 {
-    if (import_count >= MAX_IMPORTS) {
-        fprintf(stderr, "Error: too many imports (max %d)\n", MAX_IMPORTS);
-        return false;
-    }
-
-    // Mark base file as imported (to prevent circular self-import)
-    imported_files[import_count++] = base_file;
+    // Mark base file as imported (to prevent circular self-import).
+    // We cast away const for storage; we never write through this pointer.
+    imports_reserve(import_count + 1);
+    imported_files[import_count++] = (char *)base_file;
 
     for (int i = 0; i < program->as.program.decl_count; i++) {
         AstNode *d = program->as.program.decls[i];
@@ -177,11 +192,7 @@ bool preprocess_imports(AstNode *program, const char *base_file)
             continue;
         }
 
-        if (import_count + 1 >= MAX_IMPORTS) {
-            fprintf(stderr, "Error: too many imports (max %d)\n", MAX_IMPORTS);
-            xfree(path);
-            return false;
-        }
+        imports_reserve(import_count + 1);
         imported_files[import_count++] = path;
 
         size_t len;

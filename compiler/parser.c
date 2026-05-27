@@ -138,9 +138,22 @@ typedef struct {
     int body_token_count;
 } RuneDef;
 
-#define MAX_RUNES 64
-static RuneDef rune_defs[MAX_RUNES];
+// Dynamic rune table. The previous MAX_RUNES=64 cap silently rejected
+// macros past the limit, which is a footgun for library code.
+static RuneDef *rune_defs = NULL;
 static int rune_count = 0;
+static int rune_cap = 0;
+
+static void rune_table_reserve(int needed)
+{
+    if (needed <= rune_cap)
+        return;
+    int new_cap = rune_cap == 0 ? 16 : rune_cap;
+    while (new_cap < needed)
+        new_cap *= 2;
+    rune_defs = xrealloc(rune_defs, sizeof(*rune_defs) * (size_t)new_cap);
+    rune_cap = new_cap;
+}
 
 static RuneDef *find_rune(const char *name)
 {
@@ -1816,23 +1829,21 @@ static AstNode *parse_rune_decl(Parser *p)
     }
     expect(p, TOK_RBRACE, "expected '}' after rune body");
 
-    // Register in rune table
-    if (rune_count < MAX_RUNES) {
-        rune_defs[rune_count].name = strdup(name);
-        rune_defs[rune_count].param_names =
-            xmalloc(sizeof(char *) * (size_t)pcount);
-        for (int i = 0; i < pcount; i++)
-            rune_defs[rune_count].param_names[i] = strdup(params[i]);
-        rune_defs[rune_count].param_count = pcount;
-        rune_defs[rune_count].body_tokens =
-            xmalloc(sizeof(Token) * (size_t)bcount);
-        memcpy(rune_defs[rune_count].body_tokens, body,
-               sizeof(Token) * (size_t)bcount);
-        rune_defs[rune_count].body_token_count = bcount;
-        rune_count++;
-    } else {
-        error_at(p, rune_tok, "maximum number of runes exceeded (64)");
-    }
+    // Register in rune table. The table grows on demand so there is no
+    // longer a 64-rune ceiling for library code to trip over.
+    rune_table_reserve(rune_count + 1);
+    rune_defs[rune_count].name = strdup(name);
+    rune_defs[rune_count].param_names =
+        xmalloc(sizeof(char *) * (size_t)pcount);
+    for (int i = 0; i < pcount; i++)
+        rune_defs[rune_count].param_names[i] = strdup(params[i]);
+    rune_defs[rune_count].param_count = pcount;
+    rune_defs[rune_count].body_tokens =
+        xmalloc(sizeof(Token) * (size_t)bcount);
+    memcpy(rune_defs[rune_count].body_tokens, body,
+           sizeof(Token) * (size_t)bcount);
+    rune_defs[rune_count].body_token_count = bcount;
+    rune_count++;
 
     AstNode *n = ast_new(NODE_RUNE_DECL, rune_tok);
     n->as.rune_decl.name = name;
