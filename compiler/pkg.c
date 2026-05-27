@@ -152,14 +152,14 @@ static TomlFile *toml_parse(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return NULL;
 
-    TomlFile *toml = calloc(1, sizeof(TomlFile));
+    TomlFile *toml = xcalloc(1, sizeof(TomlFile));
     toml->cap = 4;
-    toml->sections = calloc((size_t)toml->cap, sizeof(TomlSection));
+    toml->sections = xcalloc((size_t)toml->cap, sizeof(TomlSection));
 
     // Add default section
-    toml->sections[0].section = strdup("");
+    toml->sections[0].section = xstrdup("");
     toml->sections[0].cap = 8;
-    toml->sections[0].entries = calloc(8, sizeof(TomlEntry));
+    toml->sections[0].entries = xcalloc(8, sizeof(TomlEntry));
     toml->count = 1;
 
     int current = 0;
@@ -177,13 +177,13 @@ static TomlFile *toml_parse(const char *path) {
 
             if (toml->count >= toml->cap) {
                 toml->cap *= 2;
-                toml->sections = realloc(toml->sections,
+                toml->sections = xrealloc(toml->sections,
                     sizeof(TomlSection) * (size_t)toml->cap);
             }
             current = toml->count++;
-            toml->sections[current].section = strdup(name);
+            toml->sections[current].section = xstrdup(name);
             toml->sections[current].cap = 8;
-            toml->sections[current].entries = calloc(8, sizeof(TomlEntry));
+            toml->sections[current].entries = xcalloc(8, sizeof(TomlEntry));
             toml->sections[current].count = 0;
             continue;
         }
@@ -199,11 +199,11 @@ static TomlFile *toml_parse(const char *path) {
         TomlSection *sec = &toml->sections[current];
         if (sec->count >= sec->cap) {
             sec->cap *= 2;
-            sec->entries = realloc(sec->entries,
+            sec->entries = xrealloc(sec->entries,
                 sizeof(TomlEntry) * (size_t)sec->cap);
         }
-        sec->entries[sec->count].name = strdup(key);
-        sec->entries[sec->count].value = strdup(val);
+        sec->entries[sec->count].name = xstrdup(key);
+        sec->entries[sec->count].value = xstrdup(val);
         sec->count++;
     }
 
@@ -317,7 +317,7 @@ static int pkg_add(const char *dep_name, const char *version) {
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
-    char *content = malloc((size_t)size + 1);
+    char *content = xmalloc((size_t)size + 1);
     size_t read_bytes = fread(content, 1, (size_t)size, f);
     content[read_bytes] = '\0';
     fclose(f);

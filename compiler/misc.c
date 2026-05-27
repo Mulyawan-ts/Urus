@@ -33,10 +33,6 @@ char *read_file(const char *path, size_t *out_len)
     fseek(f, 0, SEEK_SET);
 
     char *buf = xmalloc(len + 1);
-    if (!buf) {
-        fclose(f);
-        return NULL;
-    }
     fread(buf, 1, len, f);
     buf[len] = '\0';
     fclose(f);
@@ -47,6 +43,12 @@ char *read_file(const char *path, size_t *out_len)
 }
 
 // --  Memory Management  --
+//
+// All compiler-internal allocations funnel through these wrappers. They
+// abort on out-of-memory rather than returning NULL, so callers must
+// never null-check the result. If you find yourself writing
+// `if (!xmalloc(...))`, the check is dead code — delete it.
+
 void *xmalloc(size_t size)
 {
     void *ptr = malloc(size);
@@ -57,6 +59,30 @@ void *xmalloc(size_t size)
     return ptr;
 }
 
+void *xcalloc(size_t count, size_t size)
+{
+    void *ptr = calloc(count, size);
+    if (!ptr) {
+        fprintf(stderr, "Memory allocation failed; out of memory.\n");
+        abort();
+    }
+    return ptr;
+}
+
+char *xstrdup(const char *s)
+{
+    if (!s) {
+        // strdup(NULL) is UB; surface the bug instead of silently
+        // returning NULL like some libc implementations do.
+        fprintf(stderr, "xstrdup called with NULL argument.\n");
+        abort();
+    }
+    size_t len = strlen(s);
+    char *out = (char *)xmalloc(len + 1);
+    memcpy(out, s, len + 1);
+    return out;
+}
+
 void *__xrealloc(void **ptr, size_t size)
 {
     void *new_ptr = realloc(*ptr, size);
@@ -64,6 +90,7 @@ void *__xrealloc(void **ptr, size_t size)
         fprintf(stderr, "Memory re-allocation failed; out of memory.\n");
         abort();
     }
+    *ptr = new_ptr;
     return new_ptr;
 }
 

@@ -80,7 +80,19 @@ the previous version numbers.
   `scope_lookup_local()` in amortized O(1) instead of O(n). Lookups
   dominate sema time on programs with many declarations per scope; this
   removes the quadratic worst case without changing any external API.
-- (more entries will land here as the foundation PRs merge)
+- **Allocator hygiene:** every compiler-internal allocation now funnels
+  through `xmalloc` / `xcalloc` / `xstrdup` / `xrealloc`. The previous
+  mix of raw `malloc` / `calloc` / `realloc` / `strdup` (53 call sites
+  across ast, builtins, codegen, lsp, parser, pkg, preprocess, sema)
+  meant a single missed NULL check could deref-on-OOM long after the
+  failed allocation. The wrappers abort on out-of-memory with a clear
+  message, so callers cannot accidentally use an unchecked NULL.
+  Added `xcalloc` and `xstrdup` to round out the family. Also fixed a
+  latent bug in `__xrealloc` that was returning the new pointer but
+  never writing it back through the `void**`, so the `xrealloc(p, n)`
+  macro relied on the caller's assignment alone — now both paths
+  agree. Runtime allocations (`runtime/urus_runtime.h`) intentionally
+  stay on checked-malloc because user programs may want to handle OOM.
 
 ---
 

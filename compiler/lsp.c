@@ -30,14 +30,14 @@ typedef struct {
 static void jbuf_init(JsonBuf *b)
 {
     b->cap = 4096;
-    b->data = (char *)malloc((size_t)b->cap);
+    b->data = (char *)xmalloc((size_t)b->cap);
     b->len = 0;
     b->data[0] = '\0';
 }
 
 static void jbuf_free(JsonBuf *b)
 {
-    free(b->data);
+    xfree(b->data);
     b->data = NULL;
     b->len = 0;
 }
@@ -51,7 +51,7 @@ static void jbuf_append(JsonBuf *b, const char *fmt, ...)
 
     while (b->len + needed + 1 > b->cap) {
         b->cap *= 2;
-        b->data = (char *)realloc(b->data, (size_t)b->cap);
+        b->data = (char *)xrealloc(b->data, (size_t)b->cap);
     }
     va_start(ap, fmt);
     b->len += vsnprintf(b->data + b->len,
@@ -104,7 +104,7 @@ static char *json_get_str(const char *json, const char *key)
     const char *end = strchr(p, '"');
     if (!end) return NULL;
     size_t len = (size_t)(end - p);
-    char *result = (char *)malloc(len + 1);
+    char *result = (char *)xmalloc(len + 1);
     memcpy(result, p, len);
     result[len] = '\0';
     return result;
@@ -129,7 +129,7 @@ static char *lsp_read_message(void)
 
     if (content_length <= 0) return NULL;
 
-    char *body = (char *)malloc((size_t)content_length + 1);
+    char *body = (char *)xmalloc((size_t)content_length + 1);
     size_t read = fread(body, 1, (size_t)content_length, stdin);
     body[read] = '\0';
     return body;
@@ -193,11 +193,11 @@ static Document *doc_open(const char *uri, const char *content,
     if (!d) {
         if (doc_count >= MAX_DOCS) return NULL;
         d = &docs[doc_count++];
-        d->uri = strdup(uri);
+        d->uri = xstrdup(uri);
     } else {
-        free(d->content);
+        xfree(d->content);
     }
-    d->content = strdup(content);
+    d->content = xstrdup(content);
     d->version = version;
     return d;
 }
@@ -244,7 +244,7 @@ static char *uri_to_path(const char *uri)
     static const char kPrefix[] = "file:///";
     static const size_t kPrefixLen = sizeof(kPrefix) - 1; // 8
 
-    if (strncmp(uri, kPrefix, kPrefixLen) != 0) return strdup(uri);
+    if (strncmp(uri, kPrefix, kPrefixLen) != 0) return xstrdup(uri);
 
     const char *p = uri + kPrefixLen;
     size_t plen = strlen(p);
@@ -252,7 +252,7 @@ static char *uri_to_path(const char *uri)
 #ifdef _WIN32
     // file:///C:/path -> C:/path  (need at least drive letter + ':')
     if (plen >= 2 && p[1] == ':') {
-        return strdup(p);
+        return xstrdup(p);
     }
     // file:///C%3A/path -> C:/path  (need 'X', '%', '3', 'A'/'a' + the rest)
     if (plen >= 4 && p[1] == '%' && p[2] == '3' &&
@@ -260,8 +260,7 @@ static char *uri_to_path(const char *uri)
         // Result is: drive letter, ':', and (plen - 4) bytes from p+4,
         // plus a NUL terminator.
         size_t tail = plen - 4;
-        char *r = (char *)malloc(2 + tail + 1);
-        if (!r) return NULL;
+        char *r = (char *)xmalloc(2 + tail + 1);
         r[0] = p[0];
         r[1] = ':';
         memcpy(r + 2, p + 4, tail);
@@ -270,8 +269,7 @@ static char *uri_to_path(const char *uri)
     }
 #endif
     // Unix-style: file:///path -> /path. Allocate plen + 2 ('/' + payload + NUL).
-    char *r = (char *)malloc(plen + 2);
-    if (!r) return NULL;
+    char *r = (char *)xmalloc(plen + 2);
     r[0] = '/';
     memcpy(r + 1, p, plen);
     r[1 + plen] = '\0';

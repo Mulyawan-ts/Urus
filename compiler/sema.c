@@ -143,7 +143,7 @@ static void scope_hash_maybe_grow(SemaScope *s)
 
 SemaScope *scope_new(SemaScope *parent)
 {
-    SemaScope *s = calloc(1, sizeof(SemaScope));
+    SemaScope *s = xcalloc(1, sizeof(SemaScope));
     s->parent = parent;
     s->cap = 8;
     s->syms = xmalloc(sizeof(SemaSymbol) * (size_t)s->cap);
@@ -499,7 +499,7 @@ static AstType *check_expr(SemaCtx *ctx, AstNode *node)
                 if (method_sym && method_sym->tag == FN_SYM_TAG) {
                     // Rewrite: change callee to ident, prepend obj as first arg
                     node->as.call.callee->kind = NODE_IDENT;
-                    node->as.call.callee->as.ident.name = strdup(fn_name_buf);
+                    node->as.call.callee->as.ident.name = xstrdup(fn_name_buf);
 
                     int new_count = node->as.call.arg_count + 1;
                     AstNode **new_args =
@@ -1586,7 +1586,7 @@ bool sema_analyze(AstNode *program, const char *filename)
                 char mangled[512];
                 snprintf(mangled, sizeof(mangled), "%s_%s",
                          type_name, m->as.fn_decl.name);
-                char *mname = strdup(mangled);
+                char *mname = xstrdup(mangled);
 
                 if (scope_lookup_local(global, mname)) {
                     sema_error(&ctx, &m->tok, "duplicate method '%s' on '%s'",

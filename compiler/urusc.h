@@ -707,10 +707,17 @@ void codegen_generate_tests(CodeBuf *buf, AstNode *program);
 char *read_file(const char *path, size_t *out_len);
 
 // --  Memory Management  --
+//
+// All compiler-internal allocations go through these wrappers. They abort
+// on out-of-memory rather than returning NULL, so callers never need to
+// null-check their results. (The runtime — runtime/urus_runtime.h — has
+// its own checked wrappers because user code may want to handle OOM.)
 #define xfree(ptr) __xfree((void **)&(ptr))
 #define xrealloc(ptr, size) __xrealloc((void **)&(ptr), size)
 
 void *xmalloc(size_t size);
+void *xcalloc(size_t count, size_t size);
+char *xstrdup(const char *s);
 void *__xrealloc(void **ptr, size_t size);
 void __xfree(void **ptr);
 

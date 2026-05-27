@@ -374,7 +374,7 @@ static AstNode *parse_fstring(Parser *p, Token t)
 
                 // Wrap in to_str() call
                 AstNode *to_str_ident = ast_new(NODE_IDENT, t);
-                to_str_ident->as.ident.name = strdup("to_str");
+                to_str_ident->as.ident.name = xstrdup("to_str");
                 AstNode *call = ast_new(NODE_CALL, t);
                 call->as.call.callee = to_str_ident;
                 call->as.call.args = xmalloc(sizeof(AstNode *));
@@ -419,7 +419,7 @@ static AstNode *parse_fstring(Parser *p, Token t)
 
     if (!result) {
         result = ast_new(NODE_STR_LIT, t);
-        result->as.str_lit.value = strdup("");
+        result->as.str_lit.value = xstrdup("");
     }
 
     return result;
@@ -1832,11 +1832,11 @@ static AstNode *parse_rune_decl(Parser *p)
     // Register in rune table. The table grows on demand so there is no
     // longer a 64-rune ceiling for library code to trip over.
     rune_table_reserve(rune_count + 1);
-    rune_defs[rune_count].name = strdup(name);
+    rune_defs[rune_count].name = xstrdup(name);
     rune_defs[rune_count].param_names =
         xmalloc(sizeof(char *) * (size_t)pcount);
     for (int i = 0; i < pcount; i++)
-        rune_defs[rune_count].param_names[i] = strdup(params[i]);
+        rune_defs[rune_count].param_names[i] = xstrdup(params[i]);
     rune_defs[rune_count].param_count = pcount;
     rune_defs[rune_count].body_tokens =
         xmalloc(sizeof(Token) * (size_t)bcount);

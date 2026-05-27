@@ -30,7 +30,7 @@ static void add_builtin(SemaScope *global, const char *name, AstType *ret,
     s->param_count = nparams;
     s->return_type = ret;
     if (nparams > 0) {
-        s->params = calloc((size_t)nparams, sizeof(Param));
+        s->params = xcalloc((size_t)nparams, sizeof(Param));
         va_list args;
         va_start(args, nparams);
         for (int i = 0; i < nparams; i++) {

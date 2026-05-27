@@ -23,7 +23,7 @@
 
 AstNode *ast_new(NodeKind kind, Token tok)
 {
-    AstNode *n = calloc(1, sizeof(AstNode));
+    AstNode *n = xcalloc(1, sizeof(AstNode));
     n->kind = kind;
     n->tok = tok;
     n->ref_count = 1;
@@ -32,14 +32,14 @@ AstNode *ast_new(NodeKind kind, Token tok)
 
 AstType *ast_type_simple(TypeKind kind)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = kind;
     return t;
 }
 
 AstType *ast_type_array(AstType *element)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = TYPE_ARRAY;
     t->element = element;
     return t;
@@ -47,15 +47,15 @@ AstType *ast_type_array(AstType *element)
 
 AstType *ast_type_named(const char *name)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = TYPE_NAMED;
-    t->name = strdup(name);
+    t->name = xstrdup(name);
     return t;
 }
 
 AstType *ast_type_result(AstType *ok_type, AstType *err_type)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = TYPE_RESULT;
     t->ok_type = ok_type;
     t->err_type = err_type;
@@ -65,7 +65,7 @@ AstType *ast_type_result(AstType *ok_type, AstType *err_type)
 AstType *ast_type_fn(AstType **param_types, int param_count,
                      AstType *return_type)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = TYPE_FN;
     t->param_types = param_types;
     t->param_count = param_count;
@@ -75,7 +75,7 @@ AstType *ast_type_fn(AstType **param_types, int param_count,
 
 AstType *ast_type_tuple(AstType **elems, int count)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = TYPE_TUPLE;
     t->element_types = elems;
     t->element_count = count;
@@ -84,9 +84,9 @@ AstType *ast_type_tuple(AstType **elems, int count)
 
 AstType *ast_type_generic(const char *name)
 {
-    AstType *t = calloc(1, sizeof(AstType));
+    AstType *t = xcalloc(1, sizeof(AstType));
     t->kind = TYPE_GENERIC;
-    t->name = strdup(name);
+    t->name = xstrdup(name);
     return t;
 }
 
@@ -102,10 +102,10 @@ AstType *ast_type_clone(AstType *t)
 {
     if (!t)
         return NULL;
-    AstType *c = calloc(1, sizeof(AstType));
+    AstType *c = xcalloc(1, sizeof(AstType));
     c->kind = t->kind;
     if (t->name)
-        c->name = strdup(t->name);
+        c->name = xstrdup(t->name);
     if (t->element)
         c->element = ast_type_clone(t->element);
     if (t->ok_type)

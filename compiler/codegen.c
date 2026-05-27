@@ -93,7 +93,7 @@ static char *mono_mangle_name(const char *fn_name, AstType **type_args,
             buf[i] == '(' || buf[i] == ')')
             buf[i] = '_';
     }
-    return strdup(buf);
+    return xstrdup(buf);
 }
 
 // Find or register a monomorphization instance. Returns the mangled name.
@@ -118,7 +118,7 @@ static const char *mono_get_or_add(const char *fn_name, AstType **type_args,
     // Add new — table grows on demand, no hard cap.
     mono_reserve(mono_count + 1);
     MonoInstance *m = &mono_instances[mono_count++];
-    m->fn_name = strdup(fn_name);
+    m->fn_name = xstrdup(fn_name);
     m->type_args = type_args;
     m->type_arg_count = type_arg_count;
     m->mangled_name = mono_mangle_name(fn_name, type_args, type_arg_count);
@@ -337,7 +337,7 @@ static void emit_single_tuple_typedef(CodeBuf *buf, AstType *t)
         }
     }
     tuple_typedef_reserve(tuple_typedef_count + 1);
-    tuple_typedefs[tuple_typedef_count++] = strdup(name);
+    tuple_typedefs[tuple_typedef_count++] = xstrdup(name);
     emit(buf, "typedef struct { ");
     for (int i = 0; i < t->element_count; i++) {
         gen_type(buf, t->element_types[i]);

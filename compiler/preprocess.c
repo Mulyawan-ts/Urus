@@ -192,7 +192,7 @@ static char *resolve_import_path(const char *base_file, const char *import_path)
     }
 
     if (!last_sep) {
-        return strdup(import_path);
+        return xstrdup(import_path);
     }
 
     size_t dir_len = (size_t)(last_sep - base_file + 1);
