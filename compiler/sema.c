@@ -4,7 +4,7 @@
  * This file is part of the Urus Programming Language.
  * For more about this language check at
  *
- *    https://github.com/Urus-Foundatation/Urus
+ *    https://github.com/Urus-Foundation/Urus
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

@@ -60,6 +60,11 @@ the previous version numbers.
   Each registry now uses an `xrealloc`-backed grow-by-2 scheme starting
   at 16. The `tuple_type_name` 512-byte static-buffer issue is tagged
   with a `TODO(foundation)` and tracked separately.
+- **Docs:** fixed the `Foundatation` typo in every file's license header
+  (13 files: `LICENSE_HEADER`, all 11 `compiler/*.c|h` sources, and
+  `compiler/runtime/urus_runtime.h`). The URL `https://github.com/Urus-Foundatation/Urus`
+  is not a real GitHub repo, so the headers had silently been pointing at
+  a dead link since the project was created. Now reads `Urus-Foundation/Urus`.
 - (more entries will land here as the foundation PRs merge)
 
 ---
