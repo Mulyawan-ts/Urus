@@ -640,6 +640,13 @@ typedef struct {
 typedef struct Scope {
     SemaSymbol *syms;
     int count, cap;
+    // Open-addressing hash index mapping name -> index into syms[].
+    // -1 means empty bucket. We keep syms[] as the source of truth so
+    // iteration order, stable indices, and existing direct-pointer
+    // call patterns continue to work; the hash table only accelerates
+    // scope_lookup_local() from O(n) to amortized O(1).
+    int *hash_buckets;
+    int hash_cap;
     struct Scope *parent;
 } SemaScope;
 

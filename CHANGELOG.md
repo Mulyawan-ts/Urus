@@ -72,6 +72,14 @@ the previous version numbers.
   human-readable cycle (`a imports b imports a <-- closes the cycle`) and
   aborts cleanly instead of recursing until stack overflow. The chain is
   popped on every return path so sibling-import cycles are still caught.
+- **Sema (perf):** the symbol table is now backed by a hash index. Each
+  `SemaScope` keeps its dense `syms[]` array as the source of truth (so
+  iteration order, stable indices, and the "scope_add then assign fields"
+  caller pattern keep working) and a sidecar open-addressing hash table
+  (FNV-1a, linear probing, ~0.75 load factor) maps name → index for
+  `scope_lookup_local()` in amortized O(1) instead of O(n). Lookups
+  dominate sema time on programs with many declarations per scope; this
+  removes the quadratic worst case without changing any external API.
 - (more entries will land here as the foundation PRs merge)
 
 ---

@@ -88,6 +88,58 @@ static AstType *sema_resolve_type(SemaCtx *ctx, AstType *t)
 }
 
 // ---- Scope management ---
+//
+// Symbols are stored in a dense syms[] array. The hash_buckets[] table is a
+// sidecar index (open addressing, linear probing) mapping name -> index in
+// syms[]. We keep the dense array as the source of truth so:
+//   * callers that retain &syms[i] across scope_add() calls keep working
+//     (the existing pattern is "scope_add then assign fields"), and
+//   * the unused-symbol walk and other linear iterators stay simple.
+//
+// The hash table is rebuilt from scratch when it would exceed ~0.75 load.
+
+#define SCOPE_HASH_EMPTY (-1)
+
+static uint32_t scope_hash_name(const char *s)
+{
+    // FNV-1a 32-bit. Good enough for short identifier strings.
+    uint32_t h = 2166136261u;
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        h ^= *p;
+        h *= 16777619u;
+    }
+    return h;
+}
+
+static void scope_hash_insert_idx(SemaScope *s, int idx)
+{
+    uint32_t mask = (uint32_t)s->hash_cap - 1u;
+    uint32_t h = scope_hash_name(s->syms[idx].name) & mask;
+    while (s->hash_buckets[h] != SCOPE_HASH_EMPTY)
+        h = (h + 1u) & mask;
+    s->hash_buckets[h] = idx;
+}
+
+static void scope_hash_rebuild(SemaScope *s, int new_cap)
+{
+    // new_cap must be a power of two.
+    int *new_buckets = xmalloc(sizeof(int) * (size_t)new_cap);
+    for (int i = 0; i < new_cap; i++)
+        new_buckets[i] = SCOPE_HASH_EMPTY;
+    if (s->hash_buckets)
+        xfree(s->hash_buckets);
+    s->hash_buckets = new_buckets;
+    s->hash_cap = new_cap;
+    for (int i = 0; i < s->count; i++)
+        scope_hash_insert_idx(s, i);
+}
+
+static void scope_hash_maybe_grow(SemaScope *s)
+{
+    // Keep load factor below 0.75 to keep probe chains short.
+    if ((s->count + 1) * 4 > s->hash_cap * 3)
+        scope_hash_rebuild(s, s->hash_cap * 2);
+}
 
 SemaScope *scope_new(SemaScope *parent)
 {
@@ -95,22 +147,34 @@ SemaScope *scope_new(SemaScope *parent)
     s->parent = parent;
     s->cap = 8;
     s->syms = xmalloc(sizeof(SemaSymbol) * (size_t)s->cap);
+    s->hash_cap = 16; // power of two, comfortably >= cap / 0.75
+    s->hash_buckets = xmalloc(sizeof(int) * (size_t)s->hash_cap);
+    for (int i = 0; i < s->hash_cap; i++)
+        s->hash_buckets[i] = SCOPE_HASH_EMPTY;
     return s;
 }
 
 void scope_free(SemaScope *s)
 {
     xfree(s->syms);
+    xfree(s->hash_buckets);
     xfree(s);
 }
 
 SemaSymbol *scope_lookup_local(SemaScope *s, const char *name)
 {
-    for (int i = 0; i < s->count; i++) {
-        if (strcmp(s->syms[i].name, name) == 0)
-            return &s->syms[i];
+    if (s->count == 0)
+        return NULL;
+    uint32_t mask = (uint32_t)s->hash_cap - 1u;
+    uint32_t h = scope_hash_name(name) & mask;
+    for (;;) {
+        int idx = s->hash_buckets[h];
+        if (idx == SCOPE_HASH_EMPTY)
+            return NULL;
+        if (strcmp(s->syms[idx].name, name) == 0)
+            return &s->syms[idx];
+        h = (h + 1u) & mask;
     }
-    return NULL;
 }
 
 SemaSymbol *scope_lookup(SemaScope *s, const char *name)
@@ -123,16 +187,30 @@ SemaSymbol *scope_lookup(SemaScope *s, const char *name)
     return NULL;
 }
 
-SemaSymbol *scope_add(SemaScope *s, const char *name, Token tok)
+// Reserve space for one more symbol in syms[] and the hash index.
+// Returns the index of the newly-reserved slot; the caller is
+// responsible for filling syms[idx].name BEFORE the next lookup so
+// the hash table stays consistent. scope_add() does this for normal
+// callers; the lambda capture path below uses scope_reserve_slot()
+// directly for the same purpose.
+static int scope_reserve_slot(SemaScope *s)
 {
     if (s->count >= s->cap) {
         s->cap *= 2;
         s->syms = xrealloc(s->syms, sizeof(SemaSymbol) * (size_t)s->cap);
     }
-    SemaSymbol *sym = &s->syms[s->count++];
+    scope_hash_maybe_grow(s);
+    return s->count++;
+}
+
+SemaSymbol *scope_add(SemaScope *s, const char *name, Token tok)
+{
+    int idx = scope_reserve_slot(s);
+    SemaSymbol *sym = &s->syms[idx];
     memset(sym, 0, sizeof(SemaSymbol));
     sym->name = (char *)name;
     sym->tok = tok;
+    scope_hash_insert_idx(s, idx);
     return sym;
 }
 
@@ -872,19 +950,11 @@ static AstType *check_expr(SemaCtx *ctx, AstNode *node)
         // Register parameters
         for (int i = 0; i < node->as.lambda.param_count; i++) {
             Param *param = &node->as.lambda.params[i];
-            SemaSymbol sym = {0};
-            sym.name = param->name;
-            sym.type = param->type;
-            sym.tok = param->tok;
-            sym.tag = 'V';
-            sym.is_mut = param->is_mut;
-            sym.is_referenced = true; // suppress unused warnings for params
-            if (lambda_scope->count >= lambda_scope->cap) {
-                lambda_scope->cap *= 2;
-                lambda_scope->syms = xrealloc(lambda_scope->syms,
-                    sizeof(SemaSymbol) * (size_t)lambda_scope->cap);
-            }
-            lambda_scope->syms[lambda_scope->count++] = sym;
+            SemaSymbol *sym = scope_add(lambda_scope, param->name, param->tok);
+            sym->type = param->type;
+            sym->tag = 'V';
+            sym->is_mut = param->is_mut;
+            sym->is_referenced = true; // suppress unused warnings for params
         }
         // Check body with lambda return type
         AstType *saved_ret = ctx->current_fn_return;
