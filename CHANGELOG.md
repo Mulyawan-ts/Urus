@@ -65,6 +65,13 @@ the previous version numbers.
   `compiler/runtime/urus_runtime.h`). The URL `https://github.com/Urus-Foundatation/Urus`
   is not a real GitHub repo, so the headers had silently been pointing at
   a dead link since the project was created. Now reads `Urus-Foundation/Urus`.
+- **Preprocessor:** the import resolver now detects circular imports. A
+  separate `import_chain` stack tracks files currently being preprocessed
+  (distinct from `imported_files`, which tracks already-completed imports).
+  On each resolved import path the chain is checked; a hit prints a
+  human-readable cycle (`a imports b imports a <-- closes the cycle`) and
+  aborts cleanly instead of recursing until stack overflow. The chain is
+  popped on every return path so sibling-import cycles are still caught.
 - (more entries will land here as the foundation PRs merge)
 
 ---

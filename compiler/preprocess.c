@@ -23,9 +23,9 @@
 
 // --- Import resolution ---
 
-// Track imported files to dedupe imports. The list grows as needed; the
-// previous hardcoded MAX_IMPORTS=64 cap was a silent ceiling on real
-// projects' module graphs.
+// Track imported files to dedupe imports. This list both serves as a
+// "seen" set (so each file is processed at most once) and grows on
+// demand, replacing the previous hardcoded MAX_IMPORTS=64 cap.
 //
 // Entries are not owned by this table — some come from the caller
 // (base_file) and some are heap-allocated by resolve_*_path and freed
@@ -46,6 +46,30 @@ static void imports_reserve(int needed)
     import_cap = new_cap;
 }
 
+// import_chain is a stack of files whose preprocess_imports() call is
+// currently *in progress* (i.e. has not yet returned). If we encounter
+// an import whose resolved path is already on this stack, we have a
+// true import cycle (A imports B which imports A), which previously
+// would have either infinite-recursed or just confused the user with a
+// late parse error. We now refuse the import with a clear chain dump.
+//
+// The chain grows on demand alongside imported_files.
+static char **import_chain = NULL;
+static int import_chain_len = 0;
+static int import_chain_cap = 0;
+
+static void import_chain_reserve(int needed)
+{
+    if (needed <= import_chain_cap)
+        return;
+    int new_cap = import_chain_cap == 0 ? 16 : import_chain_cap;
+    while (new_cap < needed)
+        new_cap *= 2;
+    import_chain = xrealloc(import_chain,
+                            sizeof(*import_chain) * (size_t)new_cap);
+    import_chain_cap = new_cap;
+}
+
 static bool already_imported(const char *path)
 {
     for (int i = 0; i < import_count; i++) {
@@ -53,6 +77,27 @@ static bool already_imported(const char *path)
             return true;
     }
     return false;
+}
+
+// Is `path` currently being processed further up the call stack?
+static int import_chain_index(const char *path)
+{
+    for (int i = 0; i < import_chain_len; i++) {
+        if (strcmp(path, import_chain[i]) == 0)
+            return i;
+    }
+    return -1;
+}
+
+// Pretty-print the chain of files starting at `start_idx` to stderr,
+// ending with the offending import that closed the cycle.
+static void report_import_cycle(int start_idx, const char *closing_path)
+{
+    fprintf(stderr, "Error: circular import detected:\n");
+    for (int i = start_idx; i < import_chain_len; i++) {
+        fprintf(stderr, "  %s\n      imports\n", import_chain[i]);
+    }
+    fprintf(stderr, "  %s   <-- closes the cycle\n", closing_path);
 }
 
 // TODO: Add check if path is same with URUSCPATH even though is using "../"
@@ -161,10 +206,17 @@ static char *resolve_import_path(const char *base_file, const char *import_path)
 
 bool preprocess_imports(AstNode *program, const char *base_file)
 {
-    // Mark base file as imported (to prevent circular self-import).
-    // We cast away const for storage; we never write through this pointer.
-    imports_reserve(import_count + 1);
-    imported_files[import_count++] = (char *)base_file;
+    // Mark base file as imported (so we don't process it twice) and push
+    // it onto the in-progress chain so that any import below us that
+    // resolves back to base_file is reported as a cycle rather than
+    // silently dropped or infinite-recursed. We cast away const for
+    // storage; we never write through these pointers.
+    if (!already_imported(base_file)) {
+        imports_reserve(import_count + 1);
+        imported_files[import_count++] = (char *)base_file;
+    }
+    import_chain_reserve(import_chain_len + 1);
+    import_chain[import_chain_len++] = (char *)base_file;
 
     for (int i = 0; i < program->as.program.decl_count; i++) {
         AstNode *d = program->as.program.decls[i];
@@ -183,8 +235,20 @@ bool preprocess_imports(AstNode *program, const char *base_file)
                         "directories\n",
                         d->as.import_decl.path);
                 xfree(path);
+                import_chain_len--;
                 return false;
             }
+        }
+
+        // Cycle check: is `path` already being processed up the call
+        // stack? If so, refuse with a clear chain dump instead of
+        // recursing forever.
+        int cyc = import_chain_index(path);
+        if (cyc >= 0) {
+            report_import_cycle(cyc, path);
+            xfree(path);
+            import_chain_len--;
+            return false;
         }
 
         if (already_imported(path)) {
@@ -203,6 +267,7 @@ bool preprocess_imports(AstNode *program, const char *base_file)
             if (d->as.import_decl.is_stdlib)
                 fprintf(stderr, "Tip: make sure you've installed urus stdlib "
                                 "correctly in your environment\n");
+            import_chain_len--;
             return false;
         }
 
@@ -212,6 +277,7 @@ bool preprocess_imports(AstNode *program, const char *base_file)
         Token *tokens = lexer_tokenize(&lexer, &token_count);
         if (!tokens) {
             xfree(source);
+            import_chain_len--;
             return false;
         }
 
@@ -225,14 +291,19 @@ bool preprocess_imports(AstNode *program, const char *base_file)
             ast_free(imported);
             xfree(tokens);
             xfree(source);
+            import_chain_len--;
             return false;
         }
 
-        // Recursively process imports in the imported file
+        // Recursively process imports in the imported file. The recursive
+        // call will push/pop its own entry on import_chain; we keep ours
+        // pushed for the duration of this loop iteration so a sibling
+        // import that names base_file is still detected as a cycle.
         if (!preprocess_imports(imported, path)) {
             ast_free(imported);
             xfree(tokens);
             xfree(source);
+            import_chain_len--;
             return false;
         }
 
@@ -277,5 +348,6 @@ bool preprocess_imports(AstNode *program, const char *base_file)
         // Re-scan from beginning since we modified the array
         i = -1;
     }
+    import_chain_len--;
     return true;
 }
