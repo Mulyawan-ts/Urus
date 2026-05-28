@@ -104,6 +104,23 @@ the previous version numbers.
   wrong identifier on tuples-of-tuples. `elem_sizeof` and `elem_ctype`
   were similarly leaking through static buffers; both now return
   heap-allocated strings the caller `xfree`s.
+- **Security (urusc):** two issues in `compiler/urusc.c`:
+  1. **TOCTOU on the temp `.c` file.** The driver used to write to a
+     predictable `_urus_tmp_<pid>.c` in the current directory. A local
+     attacker on the same filesystem could pre-create that path as a
+     symlink to an arbitrary file the user owns; when `urusc` `fopen`'d
+     it for writing, the generated C bytes would land in the link
+     target. Now the temp file is opened via `mkstemps` (POSIX) or
+     `_sopen_s` with `_O_CREAT|_O_EXCL` (Windows) under an
+     unpredictable name, so an existing path causes the open to fail
+     rather than be followed.
+  2. **`system()` for emcc.** The WASM/WASI codepath built a shell
+     command string and ran `system(cmd)`, interpolating the user's
+     `-o` value and the temp file path. A hostile `-o` (e.g. supplied
+     by a build script) could inject arbitrary shell. Now emcc is
+     invoked through an explicit `argv` via `fork`/`execvp` on POSIX
+     and `_spawnvp` on Windows, matching the fix already shipped for
+     `urusc pkg install` in v0.1.0.
 
 ---
 

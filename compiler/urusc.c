@@ -32,13 +32,97 @@ int pkg_main(int argc, char **argv);
 #define TokenType _win_TokenType
 #include <windows.h>
 #undef TokenType
+#include <io.h>
 #include <process.h>
+#include <fcntl.h>
+#include <share.h>
+#include <sys/stat.h>
 #else
 // Uses fork, execvp() to avoid command injection
+#include <fcntl.h>
 #include <limits.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+
+// Create a unique temp .c file in the current directory and open it for
+// writing. The previous _urus_tmp_<pid>.c scheme was predictable, so a
+// local attacker could pre-create a symlink at that path and trick the
+// compiler into writing user-controlled bytes into an arbitrary file.
+//
+// On POSIX we use mkstemp() with mode 0600. On Windows we use _sopen_s
+// with _O_CREAT | _O_EXCL so we fail rather than open something that
+// already exists. The path is written into out_path; the file is opened
+// in binary write mode and returned. On failure returns NULL.
+static FILE *urusc_create_temp_c(char *out_path, size_t out_path_cap)
+{
+#ifdef _WIN32
+    // _O_EXCL + _O_CREAT means the call fails if the file already exists,
+    // closing the symlink-substitution window. We retry a handful of
+    // times with PID + counter to find a free name.
+    for (int attempt = 0; attempt < 32; attempt++) {
+        snprintf(out_path, out_path_cap, "_urus_tmp_%d_%d.c",
+                 (int)GetCurrentProcessId(), attempt);
+        int fd = -1;
+        errno_t err = _sopen_s(&fd, out_path,
+                               _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY,
+                               _SH_DENYNO, _S_IREAD | _S_IWRITE);
+        if (err == 0 && fd >= 0) {
+            FILE *f = _fdopen(fd, "wb");
+            if (!f) {
+                _close(fd);
+                remove(out_path);
+                return NULL;
+            }
+            return f;
+        }
+    }
+    return NULL;
+#else
+    snprintf(out_path, out_path_cap, "_urus_tmp_XXXXXX.c");
+    // mkstemps with a 2-char suffix (".c") so the file name ends in .c
+    // for downstream gcc/emcc that may care about extension. mkstemps
+    // is POSIX-ish (glibc, musl, *BSD, macOS) — if we ever need stricter
+    // portability we can fall back to mkstemp + rename.
+    int fd = mkstemps(out_path, 2);
+    if (fd < 0)
+        return NULL;
+    FILE *f = fdopen(fd, "wb");
+    if (!f) {
+        close(fd);
+        remove(out_path);
+        return NULL;
+    }
+    return f;
+#endif
+}
+
+// Spawn a subprocess from an explicit argv (no shell). Returns the
+// child's exit status, or -1 on spawn failure. argv must be NULL-
+// terminated. This is the same shape as the helpers used by pkg.c —
+// we keep them per-file rather than sharing to avoid widening the
+// LSP/pkg/urusc dependency graph.
+static int urusc_spawn_argv(const char *prog, char *const argv[])
+{
+#ifdef _WIN32
+    intptr_t rc = _spawnvp(_P_WAIT, prog, argv);
+    if (rc == -1)
+        return -1;
+    return (int)rc;
+#else
+    pid_t pid = fork();
+    if (pid < 0)
+        return -1;
+    if (pid == 0) {
+        execvp(prog, argv);
+        _exit(127);
+    }
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0)
+        return -1;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+#endif
+}
 
 // Find gcc executable, trying common paths on Windows
 static const char *find_gcc(void)
@@ -257,15 +341,17 @@ int main(int argc, char **argv)
     if (emit_c) {
         printf("%s", cbuf.data);
     } else {
-        // Generate unique temp filename to prevent TOCTOU race conditions
+        // Open a fresh exclusive temp .c with an unpredictable name to
+        // close the TOCTOU window the old _urus_tmp_<pid>.c scheme had.
         char c_path_buf[256];
-#ifdef _WIN32
-        snprintf(c_path_buf, sizeof(c_path_buf), "_urus_tmp_%d.c",
-                 (int)GetCurrentProcessId());
-#else
-        snprintf(c_path_buf, sizeof(c_path_buf), "_urus_tmp_%d.c",
-                 (int)getpid());
-#endif
+        FILE *f = urusc_create_temp_c(c_path_buf, sizeof(c_path_buf));
+        if (!f) {
+            fprintf(stderr, "Error: cannot create temp file in current "
+                            "directory (no writable spot or excessive "
+                            "name collisions)\n");
+            codegen_free(&cbuf);
+            goto cleanup_err;
+        }
         const char *c_path = c_path_buf;
 
         const char *out_path;
@@ -283,12 +369,6 @@ int main(int argc, char **argv)
 #endif
         }
 
-        FILE *f = fopen(c_path, "wb");
-        if (!f) {
-            fprintf(stderr, "Error: cannot create temp file '%s'\n", c_path);
-            codegen_free(&cbuf);
-            goto cleanup_err;
-        }
         fwrite(cbuf.data, 1, cbuf.len, f);
         fclose(f);
 
@@ -304,26 +384,46 @@ int main(int argc, char **argv)
             compiler_cmd = find_gcc();
         }
 
-        // WASM target: use emcc with appropriate flags
+        // WASM target: invoke emcc through argv (no shell). The previous
+        // system(cmd) call interpolated user-controlled `output` and the
+        // temp file path into a shell command — a malicious `-o` value
+        // could inject arbitrary shell when the user ran `urusc run` on
+        // hostile input. fork+execvp / _spawnvp closes that vector.
         if (is_wasm) {
-            char cmd[8192];
-            if (target && strcmp(target, "wasi") == 0) {
-                snprintf(cmd, sizeof(cmd),
-                         "%s -std=c11 -O2 -o \"%s\" \"%s\" -lm"
-                         " -DURUS_WASM"
-                         " -s STANDALONE_WASM",
-                         compiler_cmd, out_path, c_path);
+            const bool wasi = (target && strcmp(target, "wasi") == 0);
+            // Largest argv:
+            //   emcc, -std=c11, -O2, -o, OUT, IN, -lm, -DURUS_WASM,
+            //   -s, STANDALONE_WASM,
+            //   -s, EXPORTED_RUNTIME_METHODS=...,
+            //   -s, ALLOW_MEMORY_GROWTH=1,
+            //   NULL
+            char *argv[16];
+            int argc = 0;
+            argv[argc++] = (char *)compiler_cmd;
+            argv[argc++] = (char *)"-std=c11";
+            argv[argc++] = (char *)"-O2";
+            argv[argc++] = (char *)"-o";
+            argv[argc++] = (char *)out_path;
+            argv[argc++] = (char *)c_path;
+            argv[argc++] = (char *)"-lm";
+            argv[argc++] = (char *)"-DURUS_WASM";
+            if (wasi) {
+                argv[argc++] = (char *)"-s";
+                argv[argc++] = (char *)"STANDALONE_WASM";
             } else {
-                // wasm target — generate .html + .js + .wasm
-                snprintf(cmd, sizeof(cmd),
-                         "%s -std=c11 -O2 -o \"%s\" \"%s\" -lm"
-                         " -DURUS_WASM"
-                         " -s EXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\"]"
-                         " -s ALLOW_MEMORY_GROWTH=1",
-                         compiler_cmd, out_path, c_path);
+                argv[argc++] = (char *)"-s";
+                argv[argc++] = (char *)
+                    "EXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\"]";
+                argv[argc++] = (char *)"-s";
+                argv[argc++] = (char *)"ALLOW_MEMORY_GROWTH=1";
             }
-            fprintf(stderr, "Compiling (WASM): %s\n", cmd);
-            int ret = system(cmd);
+            argv[argc] = NULL;
+
+            fprintf(stderr, "Compiling (WASM): %s -std=c11 -O2 -o %s %s -lm"
+                            " -DURUS_WASM%s\n",
+                    compiler_cmd, out_path, c_path,
+                    wasi ? " -s STANDALONE_WASM" : " -s EXPORTED_RUNTIME_METHODS=... -s ALLOW_MEMORY_GROWTH=1");
+            int ret = urusc_spawn_argv(compiler_cmd, argv);
             remove(c_path);
             if (ret != 0) {
                 fprintf(stderr, "WASM compilation failed.\n");
