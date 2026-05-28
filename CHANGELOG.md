@@ -134,6 +134,15 @@ the previous version numbers.
   - `tests/invalid/import_cycle_{a,b}` — a pair of mutually-importing
     files; either entrypoint must be rejected by the cycle detection
     from #190.
+- **CI:** added an AddressSanitizer + UndefinedBehaviorSanitizer matrix
+  job to `.github/workflows/test.yml`. Builds the compiler with
+  `clang -fsanitize=address` / `-fsanitize=undefined`,
+  `-fno-sanitize-recover=all`, and runs the full CTest suite under
+  ASAN_OPTIONS / UBSAN_OPTIONS that abort on first error and report
+  leaks. The job is independent of `build-and-test` so a sanitizer
+  hit fails its own job — and won't block release builds — while
+  surfacing real bugs (use-after-free, signed overflow, NULL deref,
+  leaks) that a plain Release build silently tolerates.
 
 ---
 

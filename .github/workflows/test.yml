@@ -31,3 +31,52 @@ jobs:
 
     - name: Run CTest
       run: ctest --test-dir compiler/build --output-on-failure --parallel $(nproc)
+
+  sanitizers:
+    # Build the compiler under AddressSanitizer + UndefinedBehaviorSanitizer
+    # and run the test suite through it. Catches use-after-free, out-of-
+    # bounds, leaks, signed overflow, NULL deref, and other UB that a
+    # plain release build silently accepts.
+    #
+    # We don't gate the main 'build-and-test' job on this — sanitizers
+    # can have false positives in third-party code (e.g. emcc/stdlib),
+    # and the foundation work specifically targets the compiler binary,
+    # not the user runtime. Treat failures here as bugs in our code.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential clang
+
+    - name: Configure CMake (sanitizer=${{ matrix.sanitizer }})
+      env:
+        CC: clang
+        # -fno-omit-frame-pointer keeps ASan/UBSan stack traces readable.
+        # -fno-sanitize-recover=all turns UBSan warnings into hard errors
+        # so the test fails the job instead of silently continuing.
+        CFLAGS: -fsanitize=${{ matrix.sanitizer }} -fno-sanitize-recover=all -fno-omit-frame-pointer -g -O1
+        LDFLAGS: -fsanitize=${{ matrix.sanitizer }}
+      run: cmake -S compiler -B compiler/build -DCMAKE_BUILD_TYPE=Debug
+
+    - name: Build Urus Compiler
+      run: cmake --build compiler/build --parallel $(nproc)
+
+    - name: Install stdlib
+      run: |
+        sudo mkdir -p /usr/lib/urusc
+        sudo cp compiler/stdlib/*.urus /usr/lib/urusc/
+
+    - name: Run CTest under ${{ matrix.sanitizer }}sanitizer
+      env:
+        # Surface every leak and abort on the first issue.
+        ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:abort_on_error=1
+      run: ctest --test-dir compiler/build --output-on-failure --parallel $(nproc)
