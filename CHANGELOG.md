@@ -93,6 +93,17 @@ the previous version numbers.
   macro relied on the caller's assignment alone — now both paths
   agree. Runtime allocations (`runtime/urus_runtime.h`) intentionally
   stay on checked-malloc because user programs may want to handle OOM.
+- **Codegen (tuples):** rewrote `tuple_type_name()` to return a
+  heap-allocated, caller-owned string built with a growable buffer,
+  replacing the 512-byte static buffer that used to `exit(1)` on
+  overflow. While auditing the call sites, found a *silent
+  miscompilation*: `emit_single_tuple_typedef()` saved a pointer into
+  the static buffer, then recursed into nested tuple typedefs which
+  clobbered the buffer, after which the original pointer was used to
+  emit the typedef name and a `_drop` function — producing C with the
+  wrong identifier on tuples-of-tuples. `elem_sizeof` and `elem_ctype`
+  were similarly leaking through static buffers; both now return
+  heap-allocated strings the caller `xfree`s.
 
 ---
 

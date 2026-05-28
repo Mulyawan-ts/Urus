@@ -263,37 +263,55 @@ static void gen_lambda_fn(CodeBuf *buf, AstNode *node)
 static bool tuple_needs_drop(AstType *t);
 static bool type_needs_drop(AstType *t);
 
-// Build the C identifier for a tuple type. Returns a pointer into a static
-// buffer — callers that need to keep the name across another tuple_type_name
-// call must strdup() it.
-//
-// TODO(foundation): the 512-byte buffer can be exceeded by deeply nested
-// generic-of-tuple-of-... types; we currently exit(1). A subsequent PR
-// will switch this to a growable string builder and a return value the
-// caller owns.
-static const char *tuple_type_name(AstType *t)
+// Build the C identifier for a tuple type. Returns a *heap-allocated*
+// string the caller owns and must xfree(). Previously this returned a
+// pointer into a 512-byte static buffer; deeply nested tuples could
+// overflow it (we used to exit(1)), and — more subtly — any caller that
+// held the pointer across another tuple_type_name() call silently got
+// its name clobbered, including emit_single_tuple_typedef itself which
+// recurses into nested tuple types before using `name` again. Both
+// failure modes are gone now.
+static char *tuple_type_name(AstType *t)
 {
-    static char buf[512];
-    int pos = snprintf(buf, sizeof(buf), "_urus_tuple");
+    // Use a CodeBuf-style growable builder. Start small; the wrapper
+    // grows on demand so there's no hard ceiling on the length.
+    size_t cap = 64;
+    size_t len = 0;
+    char *out = xmalloc(cap);
+    const char *prefix = "_urus_tuple";
+    size_t plen = strlen(prefix);
+    while (len + plen + 1 > cap) {
+        cap *= 2;
+        out = xrealloc(out, cap);
+    }
+    memcpy(out + len, prefix, plen);
+    len += plen;
+    out[len] = '\0';
+
     for (int i = 0; i < t->element_count; i++) {
-        if (pos >= (int)sizeof(buf) - 1) {
-            fprintf(stderr,
-                    "Error: tuple type name too long (exceeds %d bytes)\n",
-                    (int)sizeof(buf));
-            exit(1);
+        const char *piece = ast_type_str(t->element_types[i]);
+        size_t pelen = strlen(piece);
+        // +1 for the leading '_', +1 for the NUL.
+        while (len + 1 + pelen + 1 > cap) {
+            cap *= 2;
+            out = xrealloc(out, cap);
         }
-        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "_%s",
-                        ast_type_str(t->element_types[i]));
+        out[len++] = '_';
+        memcpy(out + len, piece, pelen);
+        len += pelen;
+        out[len] = '\0';
     }
-    // Sanitize: replace non-alnum with _
-    for (int i = 0; buf[i]; i++) {
-        if (buf[i] != '_' && !((buf[i] >= 'a' && buf[i] <= 'z') ||
-                               (buf[i] >= 'A' && buf[i] <= 'Z') ||
-                               (buf[i] >= '0' && buf[i] <= '9'))) {
-            buf[i] = '_';
-        }
+
+    // Sanitize: replace anything that's not a valid C identifier char.
+    for (size_t i = 0; i < len; i++) {
+        char c = out[i];
+        bool ok = (c == '_') ||
+                  (c >= 'a' && c <= 'z') ||
+                  (c >= 'A' && c <= 'Z') ||
+                  (c >= '0' && c <= '9');
+        if (!ok) out[i] = '_';
     }
-    return buf;
+    return out;
 }
 
 // Dynamic registry of emitted tuple typedef names. The previous
@@ -327,9 +345,11 @@ static bool tuple_typedef_exists(const char *name)
 // Emit a single tuple typedef given a TYPE_TUPLE AstType
 static void emit_single_tuple_typedef(CodeBuf *buf, AstType *t)
 {
-    const char *name = tuple_type_name(t);
-    if (tuple_typedef_exists(name))
+    char *name = tuple_type_name(t);
+    if (tuple_typedef_exists(name)) {
+        xfree(name);
         return;
+    }
     // First emit typedefs for nested tuple element types
     for (int i = 0; i < t->element_count; i++) {
         if (t->element_types[i]->kind == TYPE_TUPLE) {
@@ -370,11 +390,15 @@ static void emit_single_tuple_typedef(CodeBuf *buf, AstType *t)
                 emit(buf, "    urus_result_drop(&tp->f%d);\n", i);
             else if (ft->kind == TYPE_NAMED)
                 emit(buf, "    %s_drop(&tp->f%d);\n", ft->name, i);
-            else if (ft->kind == TYPE_TUPLE && tuple_needs_drop(ft))
-                emit(buf, "    %s_drop(&tp->f%d);\n", tuple_type_name(ft), i);
+            else if (ft->kind == TYPE_TUPLE && tuple_needs_drop(ft)) {
+                char *ftname = tuple_type_name(ft);
+                emit(buf, "    %s_drop(&tp->f%d);\n", ftname, i);
+                xfree(ftname);
+            }
         }
         emit(buf, "}\n");
     }
+    xfree(name);
 }
 
 static void collect_and_emit_tuple_typedefs_from_type(CodeBuf *buf, AstType *t)
@@ -618,9 +642,12 @@ static void gen_type(CodeBuf *buf, AstType *t)
     case TYPE_FN:
         emit(buf, "void*");
         break; // function pointers as void*
-    case TYPE_TUPLE:
-        emit(buf, "%s", tuple_type_name(t));
+    case TYPE_TUPLE: {
+        char *tname = tuple_type_name(t);
+        emit(buf, "%s", tname);
+        xfree(tname);
         break;
+    }
     case TYPE_GENERIC:
         // Should not appear in final codegen (substituted during monomorphization)
         emit(buf, "/* generic %s */ void*", t->name);
@@ -650,59 +677,66 @@ static bool tuple_needs_drop(AstType *t)
 }
 
 // Return the C sizeof expression for an array element type
-static const char *elem_sizeof(AstType *t)
+// Returns a heap-allocated string the caller must xfree(). Heap return
+// rather than static buffer because TYPE_TUPLE delegates to
+// tuple_type_name() which is now heap-owning.
+static char *elem_sizeof(AstType *t)
 {
     if (!t)
-        return "sizeof(int64_t)";
+        return xstrdup("sizeof(int64_t)");
     switch (t->kind) {
     case TYPE_INT:
-        return "sizeof(int64_t)";
+        return xstrdup("sizeof(int64_t)");
     case TYPE_FLOAT:
-        return "sizeof(double)";
+        return xstrdup("sizeof(double)");
     case TYPE_BOOL:
-        return "sizeof(bool)";
+        return xstrdup("sizeof(bool)");
     case TYPE_STR:
-        return "sizeof(urus_str*)";
+        return xstrdup("sizeof(urus_str*)");
     case TYPE_NAMED:
-        return "sizeof(void*)";
+        return xstrdup("sizeof(void*)");
     case TYPE_ARRAY:
-        return "sizeof(urus_array*)";
+        return xstrdup("sizeof(urus_array*)");
     case TYPE_RESULT:
-        return "sizeof(urus_result*)";
+        return xstrdup("sizeof(urus_result*)");
     case TYPE_TUPLE: {
-        static char buf[128];
-        snprintf(buf, sizeof(buf), "sizeof(%s)", tuple_type_name(t));
-        return buf;
+        char *tname = tuple_type_name(t);
+        size_t need = strlen("sizeof()") + strlen(tname) + 1;
+        char *out = xmalloc(need);
+        snprintf(out, need, "sizeof(%s)", tname);
+        xfree(tname);
+        return out;
     }
     default:
-        return "sizeof(int64_t)";
+        return xstrdup("sizeof(int64_t)");
     }
 }
 
-// Return the C type cast for compound literal in push
-static const char *elem_ctype(AstType *t)
+// Return the C type cast for compound literal in push. Returns a
+// heap-allocated string the caller must xfree().
+static char *elem_ctype(AstType *t)
 {
     if (!t)
-        return "int64_t";
+        return xstrdup("int64_t");
     switch (t->kind) {
     case TYPE_INT:
-        return "int64_t";
+        return xstrdup("int64_t");
     case TYPE_FLOAT:
-        return "double";
+        return xstrdup("double");
     case TYPE_BOOL:
-        return "bool";
+        return xstrdup("bool");
     case TYPE_STR:
-        return "urus_str*";
+        return xstrdup("urus_str*");
     case TYPE_NAMED:
-        return "void*";
+        return xstrdup("void*");
     case TYPE_ARRAY:
-        return "urus_array*";
+        return xstrdup("urus_array*");
     case TYPE_RESULT:
-        return "urus_result*";
+        return xstrdup("urus_result*");
     case TYPE_TUPLE:
         return tuple_type_name(t);
     default:
-        return "int64_t";
+        return xstrdup("int64_t");
     }
 }
 
@@ -1043,7 +1077,7 @@ static void gen_expr(CodeBuf *buf, AstNode *node)
                     elem = arr_type->element;
                 }
             }
-            const char *ctype = elem_ctype(elem);
+            char *ctype = elem_ctype(elem);
             emit(buf, "urus_array_push(");
             if (node->as.call.arg_count > 0)
                 gen_expr(buf, node->as.call.args[0]);
@@ -1051,6 +1085,7 @@ static void gen_expr(CodeBuf *buf, AstNode *node)
             if (node->as.call.arg_count > 1)
                 gen_expr(buf, node->as.call.args[1]);
             emit(buf, "})");
+            xfree(ctype);
         } else {
             const char *c_name = NULL;
             if (fn_name) {
@@ -1210,8 +1245,8 @@ static int gen_expr_pre(CodeBuf *buf, AstNode *node)
             elem = node->resolved_type->element;
         }
 
-        const char *sz = elem_sizeof(elem);
-        const char *ctype = elem_ctype(elem);
+        char *sz = elem_sizeof(elem);
+        char *ctype = elem_ctype(elem);
 
         emit_indent(buf);
         emit(buf, "urus_array* _urus_arr_%d = urus_array_new(%s, %d, ", tmp, sz,
@@ -1229,6 +1264,8 @@ static int gen_expr_pre(CodeBuf *buf, AstNode *node)
             gen_expr(buf, node->as.array_lit.elements[i]);
             emit(buf, "});\n");
         }
+        xfree(sz);
+        xfree(ctype);
 
         return tmp;
     }
@@ -1444,8 +1481,11 @@ static void gen_stmt(CodeBuf *buf, AstNode *node)
                         emit(buf, "URUS_RAII(%s) ", dtor);
                     else if (ft->kind == TYPE_NAMED)
                         emit(buf, "URUS_RAII(%s_drop) ", ft->name);
-                    else if (ft->kind == TYPE_TUPLE)
-                        emit(buf, "URUS_RAII(%s_drop) ", tuple_type_name(ft));
+                    else if (ft->kind == TYPE_TUPLE) {
+                        char *ftname = tuple_type_name(ft);
+                        emit(buf, "URUS_RAII(%s_drop) ", ftname);
+                        xfree(ftname);
+                    }
                 }
                 gen_type(buf, ft);
                 emit(buf, " %s = _urus_dtmp_%d.f%d;\n",
@@ -1478,8 +1518,9 @@ static void gen_stmt(CodeBuf *buf, AstNode *node)
                 emit(buf, "URUS_RAII(%s_drop) ", node->as.let_stmt.type->name);
                 needs_rc = false;
             } else if (node->as.let_stmt.type->kind == TYPE_TUPLE) {
-                emit(buf, "URUS_RAII(%s_drop) ",
-                     tuple_type_name(node->as.let_stmt.type));
+                char *ltname = tuple_type_name(node->as.let_stmt.type);
+                emit(buf, "URUS_RAII(%s_drop) ", ltname);
+                xfree(ltname);
                 needs_rc = false;
             }
             if (needs_rc)
@@ -1498,7 +1539,7 @@ static void gen_stmt(CodeBuf *buf, AstNode *node)
             node->as.assign_stmt.op == TOK_ASSIGN) {
             gen_expr_pre(buf, node->as.assign_stmt.value);
             AstType *elem = node->as.assign_stmt.target->resolved_type;
-            const char *ctype = elem_ctype(elem);
+            char *ctype = elem_ctype(elem);
             emit_indent(buf);
             emit(buf, "urus_array_set(");
             gen_expr(buf, node->as.assign_stmt.target->as.index_expr.object);
@@ -1507,6 +1548,7 @@ static void gen_stmt(CodeBuf *buf, AstNode *node)
             emit(buf, ", &(%s){", ctype);
             gen_expr(buf, node->as.assign_stmt.value);
             emit(buf, "});\n");
+            xfree(ctype);
         } else if (node->as.assign_stmt.op == TOK_PLUS_EQ &&
                    node->as.assign_stmt.target->resolved_type &&
                    node->as.assign_stmt.target->resolved_type->kind ==
