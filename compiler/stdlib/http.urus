@@ -7,11 +7,42 @@ __emit__("""
     // On Unix, we use popen with curl
     #endif
 
+    // The HTTP implementation in this module shells out to `curl` via
+    // popen() — see the audit note in documentation/decisions for the
+    // longer rationale. That means anything passed into the URL or
+    // body strings is interpreted by /bin/sh before it ever reaches
+    // curl, so we have to be very conservative about what we let
+    // through. The list below is intentionally broader than the bash
+    // metacharacter set: we reject anything that could plausibly be
+    // used to break out of the quoted curl argument.
+    //
+    // NOTE (foundation TODO): this is a defense-in-depth check; the
+    // real fix is to drop popen() and exec curl via fork+execvp with
+    // an explicit argv (no shell). Until that lands, callers that
+    // need to POST JSON have no good option — JSON bodies contain
+    // '"' which is rejected here. Tracked as a follow-up.
     static bool urus_http_validate_input(const char *s) {
         for (const char *p = s; *p; p++) {
-            if (*p == '"' || *p == '`' || *p == '$' || *p == ';' ||
-                *p == '|' || *p == '&' || *p == '\\' || *p == '\n' || *p == '\r') {
+            unsigned char c = (unsigned char)*p;
+            // Control characters and DEL — covers \n, \r, \t, \0 in
+            // one swoop.
+            if (c < 0x20 || c == 0x7f)
                 return false;
+            // Shell metacharacters under /bin/sh and bash.
+            switch (c) {
+                case '"': case '\'': case '`': case '$':
+                case ';': case '|': case '&':
+                case '\\':
+                case '<': case '>':       // redirection
+                case '(': case ')':       // subshell, process subst
+                case '*': case '?':       // glob
+                case '[': case ']':       // glob char class
+                case '{': case '}':       // brace expansion
+                case '!':                 // history expansion (bash)
+                case '\n': case '\r':     // already covered above
+                    return false;
+                default:
+                    break;
             }
         }
         return true;

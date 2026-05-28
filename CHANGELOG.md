@@ -1,3 +1,4 @@
+
 # Changelog
 
 ## v0.1.0 — Foundation Reset (in progress)
@@ -134,6 +135,17 @@ the previous version numbers.
   - `tests/invalid/import_cycle_{a,b}` — a pair of mutually-importing
     files; either entrypoint must be rejected by the cycle detection
     from #190.
+- **Stdlib audit (`http`):** the `urus_http_validate_input()`
+  defense-in-depth allowlist behind `urus_http_get` and
+  `urus_http_post` was missing several shell-interpretable
+  characters — `'`, `<`, `>`, `(`, `)`, `*`, `?`, `[`, `]`, `{`,
+  `}`, `!`, and most ASCII control characters. It now rejects
+  every byte below 0x20, DEL, and the full set of bash and
+  `/bin/sh` metacharacters. The real fix — exec `curl` via
+  `fork`/`execvp` with an explicit `argv` and drop the validator
+  entirely — is tracked in `documentation/decisions/ADR-004` along
+  with the rest of the stdlib audit (JSON strictness, allocator
+  consistency, module-naming review).
 - **MSVC support, explicit:** the runtime's RAII path depends on
   `__attribute__((cleanup))`, a GCC/Clang extension that native MSVC
   silently no-ops. We used to emit a `#warning` and let the build
