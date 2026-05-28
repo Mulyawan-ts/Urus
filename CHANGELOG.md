@@ -121,6 +121,19 @@ the previous version numbers.
      invoked through an explicit `argv` via `fork`/`execvp` on POSIX
      and `_spawnvp` on Windows, matching the fix already shipped for
      `urusc pkg install` in v0.1.0.
+- **Tests:** added regression coverage for prior foundation PRs that
+  shipped without dedicated tests:
+  - `tests/run/nested_tuple_typedef` — exercises the tuple-of-tuple
+    path that triggered the static-buffer aliasing miscompile fixed
+    in #193.
+  - `tests/run/many_runes` — defines 80 runes (past the old
+    `MAX_RUNES=64`) to lock in the dynamic-growth fix from #188.
+  - `tests/run/many_lambdas` — defines 300 lambdas (past the old
+    `MAX_LAMBDAS=256`, which used to *silently* drop entries) to
+    lock in the dynamic-growth fix.
+  - `tests/invalid/import_cycle_{a,b}` — a pair of mutually-importing
+    files; either entrypoint must be rejected by the cycle detection
+    from #190.
 
 ---
 

@@ -1,0 +1,94 @@
+// Regression for PR #188 (dynamic limits): defining more than the old
+// MAX_RUNES=64 cap previously caused the rune table to overflow.
+// We register 80 distinct runes and use a few of them; if the table
+// still has a hard cap, this fails to compile or silently drops runes.
+
+rune r0(x) { x + 0 }
+rune r1(x) { x + 1 }
+rune r2(x) { x + 2 }
+rune r3(x) { x + 3 }
+rune r4(x) { x + 4 }
+rune r5(x) { x + 5 }
+rune r6(x) { x + 6 }
+rune r7(x) { x + 7 }
+rune r8(x) { x + 8 }
+rune r9(x) { x + 9 }
+rune r10(x) { x + 10 }
+rune r11(x) { x + 11 }
+rune r12(x) { x + 12 }
+rune r13(x) { x + 13 }
+rune r14(x) { x + 14 }
+rune r15(x) { x + 15 }
+rune r16(x) { x + 16 }
+rune r17(x) { x + 17 }
+rune r18(x) { x + 18 }
+rune r19(x) { x + 19 }
+rune r20(x) { x + 20 }
+rune r21(x) { x + 21 }
+rune r22(x) { x + 22 }
+rune r23(x) { x + 23 }
+rune r24(x) { x + 24 }
+rune r25(x) { x + 25 }
+rune r26(x) { x + 26 }
+rune r27(x) { x + 27 }
+rune r28(x) { x + 28 }
+rune r29(x) { x + 29 }
+rune r30(x) { x + 30 }
+rune r31(x) { x + 31 }
+rune r32(x) { x + 32 }
+rune r33(x) { x + 33 }
+rune r34(x) { x + 34 }
+rune r35(x) { x + 35 }
+rune r36(x) { x + 36 }
+rune r37(x) { x + 37 }
+rune r38(x) { x + 38 }
+rune r39(x) { x + 39 }
+rune r40(x) { x + 40 }
+rune r41(x) { x + 41 }
+rune r42(x) { x + 42 }
+rune r43(x) { x + 43 }
+rune r44(x) { x + 44 }
+rune r45(x) { x + 45 }
+rune r46(x) { x + 46 }
+rune r47(x) { x + 47 }
+rune r48(x) { x + 48 }
+rune r49(x) { x + 49 }
+rune r50(x) { x + 50 }
+rune r51(x) { x + 51 }
+rune r52(x) { x + 52 }
+rune r53(x) { x + 53 }
+rune r54(x) { x + 54 }
+rune r55(x) { x + 55 }
+rune r56(x) { x + 56 }
+rune r57(x) { x + 57 }
+rune r58(x) { x + 58 }
+rune r59(x) { x + 59 }
+rune r60(x) { x + 60 }
+rune r61(x) { x + 61 }
+rune r62(x) { x + 62 }
+rune r63(x) { x + 63 }
+rune r64(x) { x + 64 }
+rune r65(x) { x + 65 }
+rune r66(x) { x + 66 }
+rune r67(x) { x + 67 }
+rune r68(x) { x + 68 }
+rune r69(x) { x + 69 }
+rune r70(x) { x + 70 }
+rune r71(x) { x + 71 }
+rune r72(x) { x + 72 }
+rune r73(x) { x + 73 }
+rune r74(x) { x + 74 }
+rune r75(x) { x + 75 }
+rune r76(x) { x + 76 }
+rune r77(x) { x + 77 }
+rune r78(x) { x + 78 }
+rune r79(x) { x + 79 }
+
+fn main(): void {
+    print(r0!(0));
+    print(r1!(1));
+    print(r10!(0));
+    print(r63!(0));
+    print(r64!(0));
+    print(r79!(0));
+}

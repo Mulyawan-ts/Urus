@@ -1,0 +1,34 @@
+// Regression for the silent miscompile fixed in PR #193: when
+// emit_single_tuple_typedef() recursed into nested tuple types it
+// clobbered the static buffer that held the *outer* tuple's name,
+// so the outer typedef and its _drop function ended up emitted with
+// the inner tuple's name. The compile would succeed (the C is
+// well-formed) but use the wrong types — silent miscompile.
+//
+// This exercises the tuple-of-tuple path that triggered it.
+
+fn make_inner(): (int, float) {
+    return (7, 1.5);
+}
+
+fn make_outer(): ((int, float), str) {
+    let inner: (int, float) = make_inner();
+    return (inner, "outer");
+}
+
+fn main(): void {
+    let pair: ((int, float), str) = make_outer();
+    print(pair.0.0);
+    print(pair.0.1);
+    print(pair.1);
+
+    // Also exercise a triple-of-tuples to push the codegen harder.
+    let triple: ((int, int), (str, str), (float, float)) =
+        ((1, 2), ("a", "b"), (0.25, 0.75));
+    print(triple.0.0);
+    print(triple.0.1);
+    print(triple.1.0);
+    print(triple.1.1);
+    print(triple.2.0);
+    print(triple.2.1);
+}

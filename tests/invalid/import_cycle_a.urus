@@ -1,0 +1,12 @@
+// Regression for PR #190: a imports b imports a should be detected
+// as a cycle and refused, not infinite-recurse or silently succeed.
+// Counterpart file: import_cycle_b.urus
+import "import_cycle_b.urus";
+
+fn a_fn(): int {
+    return 1;
+}
+
+fn main(): void {
+    print(a_fn());
+}

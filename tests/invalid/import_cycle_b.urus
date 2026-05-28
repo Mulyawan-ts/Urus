@@ -1,0 +1,11 @@
+// Counterpart to import_cycle_a.urus. Either entrypoint should be
+// rejected by the cycle-detection logic added in PR #190.
+import "import_cycle_a.urus";
+
+fn b_fn(): int {
+    return 2;
+}
+
+fn main(): void {
+    print(b_fn());
+}
