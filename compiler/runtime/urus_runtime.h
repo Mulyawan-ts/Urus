@@ -44,9 +44,19 @@
 #if defined(__clang__) || defined(__GNUC__)
 #define URUS_RAII(dtor) __attribute__((cleanup(dtor)))
 #else
+// RAII relies on the GCC/Clang __attribute__((cleanup)) extension.
+// Without it, every heap-owning local in user code leaks at scope
+// exit — silently, with no diagnostic from the generated C compiler.
+// MSVC native is the realistic target here. To keep the
+// foundation honest we refuse to compile generated code on a
+// compiler without cleanup support; users on Windows should build
+// the runtime with clang-cl, MSYS2 GCC, or WSL until we ship an
+// explicit-drop codegen path. See CHANGELOG v0.1.0 / PR for context.
+#error \
+    "Urus runtime requires __attribute__((cleanup)) (GCC or Clang). " \
+    "MSVC native is not supported in v0.1.0 — please build with " \
+    "clang-cl, MSYS2 GCC, or WSL. Tracking issue: portable RAII codegen."
 #define URUS_RAII(dtor)
-#warning \
-    "__attribute(()) is not supported in your compiler. RAII is not gonna work."
 #endif
 
 #define URUS_MOVE(type, dest, src) \

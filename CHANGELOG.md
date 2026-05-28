@@ -134,6 +134,17 @@ the previous version numbers.
   - `tests/invalid/import_cycle_{a,b}` — a pair of mutually-importing
     files; either entrypoint must be rejected by the cycle detection
     from #190.
+- **MSVC support, explicit:** the runtime's RAII path depends on
+  `__attribute__((cleanup))`, a GCC/Clang extension that native MSVC
+  silently no-ops. We used to emit a `#warning` and let the build
+  succeed — which means programs built with that compiler leak every
+  heap-owning local at scope exit, with zero diagnostic from the C
+  toolchain. The warning is now a hard `#error` in
+  `runtime/urus_runtime.h`, and a `CMakeLists.txt` guard refuses to
+  configure under non-Clang MSVC with a message pointing at
+  alternatives (clang-cl, MSYS2 GCC, WSL). Designing a portable
+  explicit-drop codegen path is the follow-up that lifts this
+  restriction.
 - **Parser:** added panic-mode error recovery at the top level. A
   single syntax error used to abort `parser_parse()` after the first
   message (the loop gated on `p->had_error`), so errors in later

@@ -5,6 +5,21 @@ set(PROJECT_VERSION_TAGS "")
 set(CMAKE_C_STANDARD 11) # -std=c11
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# The embedded runtime (runtime/urus_runtime.h) relies on the
+# __attribute__((cleanup)) extension from GCC/Clang for RAII. MSVC
+# native silently no-ops the attribute, so user programs built with
+# the resulting compiler would leak every heap-owning local at scope
+# exit with no diagnostic. Refuse to configure here so the failure is
+# obvious at setup time rather than at run time of a stranger's
+# program. clang-cl identifies itself as Clang and is accepted.
+if(MSVC AND NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    message(FATAL_ERROR
+        "Urus v0.1.0 cannot be built with native MSVC: the runtime "
+        "requires __attribute__((cleanup)) for RAII, which MSVC does "
+        "not implement. Use clang-cl, MSYS2 GCC, or WSL. A portable "
+        "explicit-drop codegen path is tracked as a follow-up.")
+endif()
+
 configure_file(config.h.in config.h)
 
 if(MSVC)
