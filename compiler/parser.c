@@ -29,6 +29,7 @@ void parser_init(Parser *p, Token *tokens, int count)
     p->count = count;
     p->pos = 0;
     p->had_error = false;
+    p->panicking = false;
 }
 
 static Token current(Parser *p)
@@ -68,10 +69,52 @@ static Token advance_tok(Parser *p)
 
 static void error_at(Parser *p, Token t, const char *msg)
 {
-    if (p->had_error)
+    // While we're recovering from a previous syntax error, swallow new
+    // ones to avoid the cascade where a single missing brace produces
+    // dozens of follow-on errors. parser_synchronize() lifts panic mode
+    // once we've reached a known good resync point (top-level keyword,
+    // ';', or '}'), at which point new errors are reported again.
+    if (p->panicking)
         return;
     p->had_error = true;
+    p->panicking = true;
     report_error(p->filename, &t, msg);
+}
+
+// Skip tokens until we're at a position we have a reasonable chance of
+// parsing the *next* declaration or statement from. Used after an
+// error_at() to recover and keep reporting independent errors instead
+// of bailing out of the whole file. Clears panic mode on exit.
+static void parser_synchronize(Parser *p)
+{
+    // If we landed *on* a statement-terminator, consume it once so we
+    // don't immediately re-enter the same broken construct.
+    if (current(p).type == TOK_SEMICOLON ||
+        current(p).type == TOK_RBRACE) {
+        if (!at_end(p))
+            advance_tok(p);
+        p->panicking = false;
+        return;
+    }
+    while (!at_end(p)) {
+        TokenType t = current(p).type;
+        // Top-level declaration keywords — these introduce a new decl,
+        // so we can pick parsing up from here without consuming them.
+        if (t == TOK_FN || t == TOK_STRUCT || t == TOK_ENUM ||
+            t == TOK_IMPORT || t == TOK_RUNE || t == TOK_CONST ||
+            t == TOK_TYPE || t == TOK_TRAIT || t == TOK_IMPL ||
+            t == TOK_TEST || t == TOK_EMIT) {
+            break;
+        }
+        // Statement terminator — consume and stop. The next iteration
+        // of the caller's loop will start fresh.
+        if (t == TOK_SEMICOLON || t == TOK_RBRACE) {
+            advance_tok(p);
+            break;
+        }
+        advance_tok(p);
+    }
+    p->panicking = false;
 }
 
 static void warn_at(Parser *p, Token t, const char *msg)
@@ -927,6 +970,7 @@ static bool try_parse_type_args(Parser *p, AstType ***out_args, int *out_count)
 {
     int save_pos = p->pos;
     bool save_err = p->had_error;
+    bool save_panic = p->panicking;
     *out_count = 0;
     *out_args = NULL;
     if (!match(p, TOK_LT)) return false;
@@ -961,6 +1005,7 @@ fail:
     free(args);
     p->pos = save_pos;
     p->had_error = save_err;
+    p->panicking = save_panic;
     *out_count = 0;
     *out_args = NULL;
     return false;
@@ -2057,12 +2102,30 @@ AstNode *parser_parse(Parser *p)
     int cap = 16, count = 0;
     AstNode **decls = xmalloc(sizeof(AstNode *) * (size_t)cap);
 
-    while (!at_end(p) && !p->had_error) {
+    // Keep parsing top-level declarations even after a syntax error.
+    // parse_declaration() may have left us inside a broken decl with
+    // p->panicking set; parser_synchronize() then advances us to the
+    // next plausible decl boundary so independent errors elsewhere in
+    // the file still surface in one compile.
+    while (!at_end(p)) {
+        int before = p->pos;
         if (count >= cap) {
             cap *= 2;
             decls = xrealloc(decls, sizeof(AstNode *) * (size_t)cap);
         }
-        decls[count++] = parse_declaration(p);
+        AstNode *decl = parse_declaration(p);
+        if (p->panicking) {
+            parser_synchronize(p);
+            // If synchronize didn't move us forward, force a step so
+            // the loop can't get stuck on a permanently-broken token.
+            if (p->pos == before && !at_end(p))
+                advance_tok(p);
+            // Drop the partial decl; sema can't sensibly walk it.
+            if (decl)
+                ast_free(decl);
+            continue;
+        }
+        decls[count++] = decl;
     }
 
     program->as.program.decls = decls;

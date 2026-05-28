@@ -589,6 +589,10 @@ typedef struct {
     int count;
     int pos;
     bool had_error;
+    // Set when error_at() fires; cleared by parser_synchronize(). While
+    // panicking, further error_at() calls are suppressed so that one
+    // syntax mistake cannot cascade into a flood of spurious messages.
+    bool panicking;
 } Parser;
 
 void parser_init(Parser *p, Token *tokens, int count);

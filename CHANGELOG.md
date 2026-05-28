@@ -134,6 +134,18 @@ the previous version numbers.
   - `tests/invalid/import_cycle_{a,b}` — a pair of mutually-importing
     files; either entrypoint must be rejected by the cycle detection
     from #190.
+- **Parser:** added panic-mode error recovery at the top level. A
+  single syntax error used to abort `parser_parse()` after the first
+  message (the loop gated on `p->had_error`), so errors in later
+  declarations never surfaced in the same compile — you had to fix
+  one, recompile, see the next, fix it, recompile, ad nauseam. The
+  parser now sets a `panicking` flag on error, swallows further
+  errors until `parser_synchronize()` skips to the next plausible
+  decl boundary (top-level keyword, `;`, or `}`), and resumes
+  reporting. `had_error` still latches for the final exit code.
+  Speculative-parse paths (`try_parse_type_args`) save and restore
+  both flags so a probe that ultimately fails doesn't poison the
+  outer error state. Block-level recovery is a deliberate follow-up.
 - **CI:** added an AddressSanitizer + UndefinedBehaviorSanitizer matrix
   job to `.github/workflows/test.yml`. Builds the compiler with
   `clang -fsanitize=address` / `-fsanitize=undefined`,
