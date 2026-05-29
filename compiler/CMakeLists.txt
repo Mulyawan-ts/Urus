@@ -138,6 +138,32 @@ foreach(test_file ${INVALID_TESTS})
     set_tests_properties(invalid_${test_name} PROPERTIES WILL_FAIL TRUE)
 endforeach()
 
+# Determinism tests: re-emitting the C source for the same input must
+# produce byte-identical output. Covers a representative slice rather
+# than every run test — the goal is to catch hash/iteration-order or
+# fresh-RNG leaks into codegen, not to multiply CI cost.
+set(DETERMINISM_FIXTURES
+    hello.urus
+    tuples.urus
+    closures.urus
+    generics.urus
+    nested_tuple_typedef.urus
+    many_lambdas.urus
+)
+foreach(fixture ${DETERMINISM_FIXTURES})
+    set(fixture_path "${TESTS_DIR}/run/${fixture}")
+    if(EXISTS ${fixture_path})
+        get_filename_component(fixture_name ${fixture} NAME_WE)
+        add_test(NAME determinism_${fixture_name}
+            COMMAND ${CMAKE_COMMAND}
+                -DURUSC=$<TARGET_FILE:urusc>
+                -DFILE=${fixture_path}
+                -DWORKING_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                -P "${TESTS_DIR}/determinism.cmake"
+        )
+    endif()
+endforeach()
+
 # Run tests (compile, run, check output)
 file(GLOB RUN_TESTS "${TESTS_DIR}/run/*.urus")
 foreach(test_file ${RUN_TESTS})

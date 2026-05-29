@@ -135,6 +135,17 @@ the previous version numbers.
   - `tests/invalid/import_cycle_{a,b}` — a pair of mutually-importing
     files; either entrypoint must be rejected by the cycle detection
     from #190.
+- **Determinism:** added a CTest fixture (`tests/determinism.cmake`)
+  that runs `urusc --emit-c` twice on representative inputs (hello,
+  tuples, closures, generics, nested_tuple_typedef, many_lambdas)
+  and asserts the SHA-256 of the emitted C is identical between
+  runs. Codegen is already deterministic by construction — the AST
+  walk is source-ordered, `tmp_counter` resets per compile, the PR
+  #199 hash table is a *lookup* index over a dense insertion-ordered
+  array — but nothing was actively guarding the invariant. A future
+  PR that, say, hashes pointers into a generated identifier would
+  silently break reproducible builds; this catches it at PR time
+  instead of in user reports.
 - **Stdlib audit (`http`):** the `urus_http_validate_input()`
   defense-in-depth allowlist behind `urus_http_get` and
   `urus_http_post` was missing several shell-interpretable
