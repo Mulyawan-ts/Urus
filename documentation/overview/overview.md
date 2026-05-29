@@ -77,7 +77,7 @@ The `--emit-c` flag lets you inspect the generated C at any time, which makes de
 
 | Component | Implementation |
 |-----------|---------------|
-| Compiler language | C11, ~7,100 lines |
+| Compiler language | C11, ~12,700 lines |
 | Runtime | Header-only C library, embedded in the compiler binary |
 | Memory model | Reference counting with automatic retain/release |
 | Code generation target | Standard C11 (no compiler extensions) |
@@ -86,9 +86,16 @@ The `--emit-c` flag lets you inspect the generated C at any time, which makes de
 
 ## Current status
 
-URUS is at version **0.3.x** and under active development. The core language — types, control flow, structs, enums, pattern matching, error handling, tuples, macros, defer, modules — is implemented and tested. The compiler has 33 integration tests and compiles cleanly on all supported platforms.
+URUS is at version **0.1.0**, in its **foundation-hardening phase**. The version was deliberately reset from 0.3.x to signal that no public API or syntax is stable until 1.0 — see the [CHANGELOG](../../CHANGELOG.md) for the full rationale.
 
-The next milestones are generics, `Option<T>`, and method syntax (`impl` blocks). See the [Project Roadmap](../roadmap/project-roadmap.md) for the full plan.
+The features delivered in the previous 0.2/0.3 releases are kept (types, control flow, structs, enums, pattern matching, error handling, tuples, runes, defer, modules, package manager, LSP, WASM target, stdlib). What changes is the **commitment**: every subsystem is being re-audited, security-hardened, de-magic-numbered, and documented before any new feature is added.
+
+The 0.1.0 foundation pass landed in two stages totaling 17 PRs:
+
+- **Stage 1** (8 PRs, critical/audit) — x* allocator funneling, dynamic registries, sema hash index, package-manager argv spawn, LSP bounds checking, parallel-build race fixed, tuple-of-tuple miscompile fixed, license-header typo.
+- **Stage 2** (9 PRs, resilience/determinism) — TOCTOU temp files closed, emcc shell-free, ASan/UBSan CI matrix, parser panic-mode recovery, MSVC build guard, stdlib audit, byte-determinism regression test.
+
+The next milestones (post-foundation) are generics, `Option<T>`, and method syntax (`impl` blocks). See the [Project Roadmap](../roadmap/project-roadmap.md) for the full plan.
 
 ## Inspirations
 

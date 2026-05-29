@@ -1,6 +1,6 @@
 # URUS Documentation
 
-Welcome to the official documentation for the URUS programming language, version 0.3.x.
+Welcome to the official documentation for the URUS programming language, **version 0.1.0** (foundation-hardening phase — see the [CHANGELOG](../CHANGELOG.md) for the version-reset rationale).
 
 URUS is a statically-typed language that transpiles to standard C11. It brings modern language features — pattern matching, Result types, string interpolation, tuples, macros — to a simple, learnable syntax that compiles down to fast native binaries.
 
@@ -60,3 +60,7 @@ For the full setup walkthrough, head to the [Installation Guide](./installation/
 
 - **Source:** https://github.com/Urus-Foundation/Urus
 - **Issues:** https://github.com/Urus-Foundation/Urus/issues
+- **Discussions:** https://github.com/Urus-Foundation/Urus/discussions
+- **WhatsApp Community:** https://chat.whatsapp.com/GYq9gBzXogU6U4JmiqV2dm?mode=gi_t
+- **Code of Conduct:** [Contributor Covenant 2.1](../CODE_OF_CONDUCT.md)
+- **Security Reports:** see [SECURITY.md](../SECURITY.md) for private channels

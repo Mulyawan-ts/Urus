@@ -1,5 +1,14 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Documentation
+  - name: 📖 Documentation
     url: https://github.com/Urus-Foundation/Urus/tree/main/documentation
-    about: Read the documentation before asking a question
+    about: The language guide, architecture overview, and ADRs. Please skim before asking.
+  - name: 💬 GitHub Discussions
+    url: https://github.com/Urus-Foundation/Urus/discussions
+    about: Design questions, language proposals, and "is this idiomatic?" go here.
+  - name: 📱 WhatsApp Community
+    url: https://chat.whatsapp.com/GYq9gBzXogU6U4JmiqV2dm?mode=gi_t
+    about: Casual chat with maintainers and contributors (Indonesian + English).
+  - name: 🔒 Security report
+    url: https://github.com/Urus-Foundation/Urus/security/advisories/new
+    about: Found a vulnerability? Report it privately here, not in the public issue tracker.
