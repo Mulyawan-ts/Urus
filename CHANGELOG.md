@@ -1,5 +1,33 @@
-
 # Changelog
+
+All notable changes to URUS are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
+follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — with the
+caveat that **no public API or syntax is stable until 1.0**.
+
+## How to read this changelog
+
+- The **current release line is 0.1.x** — the foundation-hardening phase. See
+  the version-reset note under `v0.1.0` below for why we restarted the
+  numbering from 0.3.x.
+- Older entries (pre-reset) are preserved in
+  [`documentation/changelog/version-history.md`](./documentation/changelog/version-history.md).
+- Each foundation entry links to the PR that landed it; click through for the
+  full diff, the discussion, and the test that locks in the fix.
+- **Severity prefixes** in section headings:
+  - **S** (security) — addresses a CVE-class issue or removes an attack surface.
+  - **A** (audit) — hardens an audited subsystem without a known live exploit.
+  - **B** (build/test/docs) — infrastructure, regressions, documentation.
+
+## Release lines
+
+| Line | Status | Description |
+|------|--------|-------------|
+| **0.1.x** | Actively supported | Foundation-hardening phase. Security and correctness fixes land first. |
+| 0.3.x | End of life | Pre-reset feature line. No further releases. |
+| 0.2.x | End of life | Pre-reset feature line. No further releases. |
+
+---
 
 ## v0.1.0 — Foundation Reset (in progress)
 
@@ -19,6 +47,45 @@ de-magic-numbered, and documented before any new feature is added.
 
 See `documentation/changelog/version-history.md` for the historical record of
 the previous version numbers.
+
+### Foundation work — at a glance
+
+The foundation pass landed in two stages, 17 PRs total. Stage 1 closed the
+critical structural and security holes inherited from the 0.3.x line; Stage 2
+hardened resilience, build portability, and the test loop.
+
+#### Stage 1 — Critical / Audit (8 PRs)
+
+| # | Tier | Subject |
+|---|------|---------|
+| [#185](https://github.com/Urus-Foundation/Urus/pull/185) | B | Parallel-build race in the embedded-runtime generator |
+| [#186](https://github.com/Urus-Foundation/Urus/pull/186) | S | LSP `uri_to_path` bounds checking + null-checked allocations |
+| [#187](https://github.com/Urus-Foundation/Urus/pull/187) | S | Package manager: argv-based `git clone`, no shell |
+| [#188](https://github.com/Urus-Foundation/Urus/pull/188) | A | Removed five hardcoded `MAX_*` caps; dynamic registries |
+| [#189](https://github.com/Urus-Foundation/Urus/pull/189) | A | Foundatation → Foundation typo across 13 license headers |
+| [#190](https://github.com/Urus-Foundation/Urus/pull/190) | A | Preprocessor circular-import detection with cycle path |
+| [#191](https://github.com/Urus-Foundation/Urus/pull/191) | A | Sema scope lookup: O(n) → O(1) via FNV-1a hash index |
+| [#193](https://github.com/Urus-Foundation/Urus/pull/193) | S | `tuple_type_name` heap-owned; silent tuple-of-tuple miscompile fixed |
+
+#### Stage 2 — Resilience / Determinism (9 PRs)
+
+| # | Tier | Subject |
+|---|------|---------|
+| [#192](https://github.com/Urus-Foundation/Urus/pull/192) | S | All compiler allocations funnel through `x*` wrappers; `__xrealloc` write-back bug fixed |
+| [#194](https://github.com/Urus-Foundation/Urus/pull/194) | S | TOCTOU temp-file vector + emcc shell-injection closed |
+| [#195](https://github.com/Urus-Foundation/Urus/pull/195) | A | Regression coverage for #188, #190, #193 |
+| [#196](https://github.com/Urus-Foundation/Urus/pull/196) | A | AddressSanitizer + UndefinedBehaviorSanitizer CI matrix |
+| [#198](https://github.com/Urus-Foundation/Urus/pull/198) | A | Parser panic-mode top-level error recovery |
+| [#199](https://github.com/Urus-Foundation/Urus/pull/199) | A | Build refused under native MSVC; `#warning` promoted to `#error` |
+| [#200](https://github.com/Urus-Foundation/Urus/pull/200) | B | Stdlib audit + `http` validator hardening (ADR-004) |
+| [#201](https://github.com/Urus-Foundation/Urus/pull/201) | B | Codegen byte-determinism CTest fixture |
+
+> **Bonus finds during the audit.** PR #192 surfaced a latent bug in
+> `__xrealloc` that was returning the new pointer without writing it back
+> through the `void **` out-parameter; PR #193 surfaced a silent
+> miscompilation on tuples-of-tuples where a static buffer was reused mid-recursion.
+> Both were live in 0.3.x and would have been very hard to attribute to the
+> compiler from the symptom alone.
 
 ### Foundation work (this release, in progress)
 - Version reset from 0.3.0 → 0.1.0
