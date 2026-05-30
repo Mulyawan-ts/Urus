@@ -19,6 +19,18 @@
  * limitations under the License.
  */
 
+/* mkstemps() is in the BSD/GNU extensions namespace on glibc.
+ * Without one of these feature-test macros, <stdlib.h> only declares
+ * the POSIX-blessed mkstemp() and we get an implicit-function-
+ * declaration error under -std=c11 / -Wimplicit-function-declaration.
+ * _DEFAULT_SOURCE pulls in the BSD/SVID/GNU extensions; we define it
+ * before the first system header is included from this TU. */
+#ifndef _WIN32
+#  ifndef _DEFAULT_SOURCE
+#    define _DEFAULT_SOURCE 1
+#  endif
+#endif
+
 #include "urusc.h"
 
 // Package manager (pkg.c)

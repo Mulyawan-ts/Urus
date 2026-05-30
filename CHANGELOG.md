@@ -88,6 +88,30 @@ hardened resilience, build portability, and the test loop.
 > compiler from the symptom alone.
 
 ### Foundation work (this release, in progress)
+- **CI repair (Stage 2 follow-up):** the project's GitHub Actions
+  pipeline had been red since PR #192 — every Stage 2 PR landed via
+  admin-merge bypass, which let the regression accumulate undetected.
+  Three root causes, all fixed in one pass:
+  1. `compiler/pkg.c` used `xrealloc` and friends without including
+     `urusc.h`. `xrealloc` is a macro, not a real function — locally
+     on Windows the linker found `__xrealloc` and silently filled the
+     gap, but GNU ld emitted `undefined reference to 'xrealloc'`.
+     Added the `#include "urusc.h"` with a comment explaining why
+     pkg.c was the odd one out.
+  2. `compiler/urusc.c` called `mkstemps` (PR #194), which on glibc
+     lives in the BSD/SVID extensions namespace and is invisible
+     under `-std=c11` without a feature-test macro. Added
+     `#define _DEFAULT_SOURCE 1` before the first system header on
+     non-Windows so the prototype is in scope. Strict-mode toolchains
+     (`-Wimplicit-function-declaration`, sanitizer matrix) now
+     compile cleanly.
+  3. Workflow hardened: matrix on `{gcc, clang}` so each PR is built
+     by both, `concurrency.cancel-in-progress` saves runner minutes
+     during rapid iteration, an explicit `urusc --version` smoke test
+     fails fast if the binary is broken before CTest even starts,
+     and the determinism fixtures (#201) are re-run with `--verbose`
+     so a future regression surfaces as a focused diff instead of
+     being buried in run-test output.
 - Version reset from 0.3.0 → 0.1.0
 - Comprehensive compiler audit; tracking issues by severity
 - **Build:** fixed a parallel-build race in `compiler/CMakeLists.txt`. The

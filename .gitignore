@@ -15,6 +15,7 @@ CompileCommands.json
 !compiler/cmake/embed-string.cmake
 !compiler/CMakeLists.txt
 !tests/run_tests.cmake
+!tests/determinism.cmake
 
 # Executables
 urusc

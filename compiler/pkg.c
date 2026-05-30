@@ -12,6 +12,16 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 
+/* urusc.h declares the x* allocator family (xmalloc / xcalloc / xstrdup
+ * and the xrealloc macro that expands to __xrealloc). Previously this
+ * file used those identifiers without including the header, which
+ * happens to link on Windows (the linker pulls them in from misc.o) but
+ * fails on GNU ld with `undefined reference to 'xrealloc'` because
+ * xrealloc is a macro, not a real symbol — the unprefixed lowercase
+ * name only exists once the macro expansion has happened, and that
+ * requires the header to be in scope. See PR #192 + the CI repair PR. */
+#include "urusc.h"
+
 #ifdef _WIN32
 #include <direct.h>
 #include <process.h>
