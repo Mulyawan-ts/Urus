@@ -88,6 +88,22 @@ hardened resilience, build portability, and the test loop.
 > compiler from the symptom alone.
 
 ### Post-foundation additions
+- **Installers (Windows / macOS / Linux).** Added CPack
+  configuration plus a `release-installers.yml` workflow that
+  builds platform-native bundles on every `v*` tag push and
+  attaches them to the matching GitHub Release:
+    * Windows — NSIS `.exe` (Start-Menu shortcut, opt-in PATH update)
+    * macOS — productbuild `.pkg`
+    * Linux — `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), `.tar.gz`
+    * Source — `.tar.gz` + `.zip`
+  Newcomers can now grab a one-click installer from the releases
+  page instead of learning CMake first. Also fixed a long-standing
+  bug in the install layout where the Windows stdlib `DESTINATION`
+  was an absolute-ish `Program Files/Urusc/lib`, which CPack
+  interpreted relative to its own bundle root and ended up nesting
+  the path under itself. Replaced with a relative `lib/urusc`
+  destination that works correctly for both `cmake --install` and
+  CPack. Closes #183.
 - **Stdlib: SQLite.** Added `compiler/stdlib/sqlite.urus` with thin
   bindings over `libsqlite3`. Exposes `sqlite_open` / `sqlite_close`
   / `sqlite_exec` / `sqlite_query` / `sqlite_last_error`. Connections

@@ -101,21 +101,34 @@ endif()
 # Install urusc
 install(TARGETS urusc DESTINATION bin)
 
-# Install stdlib/* to local lib
-if(WIN32)
-    # Windows: Program Files\Urusc\lib
-    # Path separator already handled by CMake
-    set(URUS_LIB_DIR "Program Files/Urusc/lib")
-elseif(DEFINED ENV{PREFIX})
-    # Termux sets $PREFIX; honour it.
-    set(URUS_LIB_DIR "$ENV{PREFIX}/lib/urusc")
-else()
-    # Linux/Unix: /usr/local/lib/urusc
-    set(URUS_LIB_DIR "/usr/local/lib/urusc")
+# Install stdlib/* to a relative `lib/urusc` under the install prefix.
+#
+# Historically this branched per-platform with absolute paths
+# ("/usr/local/lib/urusc", "Program Files/Urusc/lib", ...). That hurt
+# CPack: CPack always rewrites DESTINATION relative to the *bundle*
+# root, so an absolute "/usr/local/lib/urusc" inside a .deb still
+# means /usr/local/lib/urusc (fine), but on Windows the literal
+# "Program Files/Urusc/lib" was treated as a path *under* the install
+# prefix, producing C:/Program Files/Urus/Program Files/Urusc/lib —
+# nested junk.
+#
+# A relative DESTINATION ("lib/urusc") plus an explicit CMAKE_INSTALL_PREFIX
+# default per platform gets us both behaviours correctly:
+#   * `sudo cmake --install build`        — root-level install where the
+#                                            user already set the prefix
+#                                            (or distro defaults to /usr/local).
+#   * `cmake --build build --target package` — CPack lays the files out
+#                                              under bin/ + lib/urusc/
+#                                              inside the bundle.
+
+if(NOT DEFINED CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    if(DEFINED ENV{PREFIX})
+        set(CMAKE_INSTALL_PREFIX "$ENV{PREFIX}" CACHE PATH "" FORCE)
+    endif()
 endif()
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/stdlib/"
-        DESTINATION "${URUS_LIB_DIR}"
+        DESTINATION "lib/urusc"
         FILES_MATCHING PATTERN "*.urus")
 
 # CTest integration
@@ -183,3 +196,81 @@ foreach(test_file ${RUN_TESTS})
         )
     endif()
 endforeach()
+
+# ----------------------------------------------------------------------
+# Packaging — CPack-driven installers per platform.
+# ----------------------------------------------------------------------
+#
+# Issue #183 asked for a Windows MSI / EXE installer so newcomers don't
+# have to learn CMake before they can try the language. CPack is the
+# native CMake answer for this: configure the project metadata here,
+# then `cmake --build build --target package` produces an installer
+# bundle of whatever generator we ask for.
+#
+# We deliberately wire CPack for *every* platform (not just Windows):
+#   * Windows  — NSIS (.exe). Lightweight, single-file, no MSI tooling
+#                required to build. Adds Start Menu shortcut and an
+#                'Add to PATH' option at install time.
+#   * macOS    — productbuild (.pkg). The graphical installer most macOS
+#                users already recognise.
+#   * Linux    — DEB + RPM. Picked up by the matching distro tooling
+#                without extra work.
+#   * Source   — TGZ + ZIP. Useful for offline distribution.
+#
+# CPack reads the install(TARGETS ...) and install(DIRECTORY ...) rules
+# above to decide what to put in the bundle — `urusc` and the stdlib
+# already register through those, so no separate manifest is needed.
+
+set(CPACK_PACKAGE_NAME "Urus")
+set(CPACK_PACKAGE_VENDOR "Urus Foundation")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "URUS — statically-typed systems language that transpiles to C11")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Urus-Foundation/Urus")
+set(CPACK_PACKAGE_CONTACT "rasyaandrean@outlook.co.id")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
+set(CPACK_RESOURCE_FILE_README  "${CMAKE_CURRENT_SOURCE_DIR}/../README.md")
+
+# Source-package generators apply on every host.
+set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
+set(CPACK_SOURCE_IGNORE_FILES
+    "/\\\\.git/"
+    "/build/"
+    "/cmake-build-.*/"
+    "/\\\\.vs/"
+    "/\\\\.idea/"
+    "/\\\\.vscode/"
+    "\\\\.o$"
+    "\\\\.obj$"
+)
+
+if(WIN32)
+    # NSIS is what `choco install nsis` / Scoop ships; both the GitHub
+    # Actions windows-latest image and a fresh developer machine can
+    # produce an .exe with no extra setup.
+    set(CPACK_GENERATOR "NSIS;ZIP")
+    set(CPACK_NSIS_DISPLAY_NAME "Urus Compiler")
+    set(CPACK_NSIS_PACKAGE_NAME "Urus")
+    set(CPACK_NSIS_HELP_LINK    "${CPACK_PACKAGE_HOMEPAGE_URL}")
+    set(CPACK_NSIS_URL_INFO_ABOUT "${CPACK_PACKAGE_HOMEPAGE_URL}")
+    set(CPACK_NSIS_CONTACT      "${CPACK_PACKAGE_CONTACT}")
+    set(CPACK_NSIS_MODIFY_PATH ON)   # offers an 'Add Urus to PATH' checkbox
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "Urus")
+elseif(APPLE)
+    set(CPACK_GENERATOR "productbuild;TGZ")
+elseif(UNIX)
+    # DEB + RPM cover Debian/Ubuntu and Fedora/RHEL/openSUSE families.
+    set(CPACK_GENERATOR "DEB;RPM;TGZ")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${CPACK_PACKAGE_HOMEPAGE_URL}")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "gcc")
+    set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")
+    set(CPACK_RPM_PACKAGE_URL "${CPACK_PACKAGE_HOMEPAGE_URL}")
+    set(CPACK_RPM_PACKAGE_REQUIRES "gcc")
+endif()
+
+include(CPack)

@@ -62,15 +62,29 @@ C11. The generated C is then handed to your system compiler (GCC, Clang, or
 
 ## 🚀 Quick Start
 
-### Requirements
+### Pre-built installers (recommended for newcomers)
+
+If you just want to try the language, grab a pre-built bundle from the
+[latest release](https://github.com/Urus-Foundation/Urus/releases/latest):
+
+| Platform | File |
+|----------|------|
+| Windows | `Urus-*.exe` — graphical NSIS installer (opt-in PATH update) |
+| macOS | `Urus-*.pkg` — graphical Apple installer |
+| Debian / Ubuntu | `Urus-*.deb` — `sudo apt install ./Urus-*.deb` |
+| Fedora / RHEL | `Urus-*.rpm` — `sudo dnf install ./Urus-*.rpm` |
+| Any Linux | `Urus-*.tar.gz` — extract and add `bin/` to your PATH |
+
+You'll still need a backend C compiler (GCC or Clang) installed
+separately to compile generated programs.
+
+### Build from source
 
 | Tool | Minimum | Notes |
 |------|---------|-------|
 | C compiler | GCC 8+, Clang 10+, or `clang-cl` | Native MSVC is rejected at configure time — see [#199](https://github.com/Urus-Foundation/Urus/pull/199). |
 | CMake | 3.10+ | |
 | A C11 backend compiler | Any of the above | Used to compile the generated C to a native binary. |
-
-### Build from source
 
 ```bash
 git clone https://github.com/Urus-Foundation/Urus.git

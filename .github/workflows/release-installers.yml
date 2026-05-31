@@ -1,0 +1,130 @@
+name: Build Release Installers
+
+# Builds installer bundles for every supported platform when a
+# v* tag is pushed (e.g. v0.1.0), or on manual dispatch for testing
+# the packaging pipeline against main without cutting a release.
+#
+# Each job produces a CPack bundle and uploads it as a workflow
+# artifact. On tag pushes the same files are also attached to the
+# corresponding GitHub Release so end users can download an .exe /
+# .pkg / .deb / .rpm without building from source — closes #183.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  windows:
+    name: Windows installer (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NSIS
+        # NSIS is what CPack's NSIS generator drives. Chocolatey
+        # has it pre-installed on the windows-latest image, but we
+        # ask explicitly so a runner-image change doesn't silently
+        # break the release pipeline.
+        run: choco install nsis -y --no-progress
+
+      - name: Configure
+        # MSYS2 GCC isn't on the windows-latest image by default
+        # and a vanilla MSVC build is refused (PR #199). Use the
+        # Visual Studio generator with clang-cl, which is the
+        # combination that already builds in the foundation pass.
+        run: cmake -S compiler -B compiler/build -G "Visual Studio 17 2022" -T ClangCL -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build compiler/build --config Release --parallel
+
+      - name: Package
+        run: |
+          cd compiler/build
+          cpack -G NSIS -C Release
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: urus-windows-installer
+          path: compiler/build/Urus-*.exe
+
+      - name: Attach to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: compiler/build/Urus-*.exe
+
+  linux:
+    name: Linux packages (.deb + .rpm + .tar.gz)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential rpm
+
+      - name: Configure
+        run: cmake -S compiler -B compiler/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build compiler/build --parallel $(nproc)
+
+      - name: Package
+        run: |
+          cd compiler/build
+          cpack -G "DEB;RPM;TGZ"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: urus-linux-packages
+          path: |
+            compiler/build/Urus-*.deb
+            compiler/build/Urus-*.rpm
+            compiler/build/Urus-*.tar.gz
+
+      - name: Attach to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            compiler/build/Urus-*.deb
+            compiler/build/Urus-*.rpm
+            compiler/build/Urus-*.tar.gz
+
+  macos:
+    name: macOS installer (.pkg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S compiler -B compiler/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build compiler/build --parallel $(sysctl -n hw.ncpu)
+
+      - name: Package
+        run: |
+          cd compiler/build
+          cpack -G "productbuild;TGZ"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: urus-macos-installer
+          path: |
+            compiler/build/Urus-*.pkg
+            compiler/build/Urus-*.tar.gz
+
+      - name: Attach to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            compiler/build/Urus-*.pkg
+            compiler/build/Urus-*.tar.gz
