@@ -19,15 +19,25 @@
  * limitations under the License.
  */
 
-/* mkstemps() is in the BSD/GNU extensions namespace on glibc.
- * Without one of these feature-test macros, <stdlib.h> only declares
- * the POSIX-blessed mkstemp() and we get an implicit-function-
- * declaration error under -std=c11 / -Wimplicit-function-declaration.
- * _DEFAULT_SOURCE pulls in the BSD/SVID/GNU extensions; we define it
- * before the first system header is included from this TU. */
+/* mkstemps() is in the BSD/GNU extensions namespace, hidden by both
+ * glibc and Apple libc under strict -std=c11. Without the right
+ * feature-test macro <stdlib.h> only declares the POSIX-blessed
+ * mkstemp() and we get an implicit-function-declaration error.
+ *
+ *   glibc / musl  — _DEFAULT_SOURCE pulls in the BSD/SVID/GNU set.
+ *   Apple libc    — _DARWIN_C_SOURCE pulls in the Darwin extensions
+ *                   namespace; without it the macOS CI build fails
+ *                   with -Wimplicit-function-declaration on mkstemps.
+ *
+ * Both are harmless when defined on the wrong host (the headers
+ * just ignore unknown macros), so we define both unconditionally on
+ * non-Windows hosts before the first system header. */
 #ifndef _WIN32
 #  ifndef _DEFAULT_SOURCE
 #    define _DEFAULT_SOURCE 1
+#  endif
+#  ifndef _DARWIN_C_SOURCE
+#    define _DARWIN_C_SOURCE 1
 #  endif
 #endif
 
