@@ -233,6 +233,23 @@ set(CPACK_PACKAGE_CONTACT "rasyaandrean@outlook.co.id")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
 set(CPACK_RESOURCE_FILE_README  "${CMAKE_CURRENT_SOURCE_DIR}/../README.md")
 
+# Apple's productbuild is fussy about resource-file extensions: it
+# only accepts .rtfd / .rtf / .html / .txt for the installer's
+# License / ReadMe / Welcome panes. Our repo ships LICENSE (no
+# extension) and README.md (.md), both of which it rejects. On
+# macOS we materialise .txt copies in the build dir and point CPack
+# at those — leaving the source-of-truth files untouched.
+if(APPLE)
+    set(_PB_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
+    set(_PB_README  "${CMAKE_CURRENT_BINARY_DIR}/README.txt")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE"
+                   "${_PB_LICENSE}" COPYONLY)
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/../README.md"
+                   "${_PB_README}"  COPYONLY)
+    set(CPACK_RESOURCE_FILE_LICENSE "${_PB_LICENSE}")
+    set(CPACK_RESOURCE_FILE_README  "${_PB_README}")
+endif()
+
 # Source-package generators apply on every host.
 set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
 set(CPACK_SOURCE_IGNORE_FILES
