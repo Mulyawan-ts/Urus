@@ -1,1 +1,15 @@
-patreon: "15684319"
+# Sponsorship channels for the URUS Foundation.
+#
+# The previous patreon entry (id "15684319") returned 404 — the
+# corresponding Patreon page does not exist. Issue #168 tracked the
+# broken link. We removed it and added GitHub Sponsors as the
+# primary channel (works out of the box for individual maintainer
+# accounts) and Ko-fi as a one-shot tip option.
+#
+# Indonesian-domiciled platforms (Saweria, Trakteer) require a real
+# account and verified bank details, so we leave them commented out
+# until a maintainer signs up. Uncomment + fill in when ready.
+
+github: [RasyaAndrean]
+ko_fi: rasyaandrean
+# custom: ['https://saweria.co/<username>', 'https://trakteer.id/<username>']
