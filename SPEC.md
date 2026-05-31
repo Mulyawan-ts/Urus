@@ -1008,6 +1008,38 @@ Operating system utilities (environment variables, process execution).
 
 Extended HTTP client functionality beyond the built-in `http_get`/`http_post`.
 
+### `sqlite.urus`
+
+Thin bindings over `libsqlite3`. The connection is returned as a small
+integer handle so URUS code never sees a raw C pointer.
+
+| Function | Description |
+|----------|-------------|
+| `sqlite_open(path: str): int` | Open / create a database. Returns a positive handle on success, `-1` on error. |
+| `sqlite_close(handle: int): bool` | Close the database. |
+| `sqlite_exec(handle: int, sql: str): bool` | Execute a non-query statement (DDL, INSERT, UPDATE, DELETE). |
+| `sqlite_query(handle: int, sql: str): [[str]]` | Execute a query and return rows of stringified cells. |
+| `sqlite_last_error(handle: int): str` | Last error message for the given connection. |
+
+**Linking.** Programs that import this module must be linked with
+`libsqlite3` at final compile time:
+
+```
+urusc app.urus -o app -l sqlite3
+```
+
+The system must provide `<sqlite3.h>` and a `libsqlite3` shared
+library. On Linux: `apt install libsqlite3-dev`; on macOS:
+`brew install sqlite`; on Windows: the SQLite amalgamation under
+MSYS2 or any toolchain that exposes the header + `.lib`.
+
+**Limitations (v0.1.x).**
+- Query results are returned as `[[str]]`; strict typed columns wait
+  for the 0.2.x type-system work.
+- No bind / parameterise API yet — callers must escape any untrusted
+  data they interpolate into SQL strings.
+- Up to 32 simultaneous connections (`URUS_SQLITE_MAX`).
+
 ---
 
 ## Grammar (EBNF)

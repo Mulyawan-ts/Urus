@@ -1,0 +1,20 @@
+// Smoke test: importing the sqlite stdlib module must compile
+// cleanly through urusc. We don't link against libsqlite3 in CI
+// (it isn't a build dependency of urusc itself), so this test is
+// registered only for the `--emit-c` path via the
+// `valid_stdlib_sqlite_compile` CTest entry — not as a `run_*`
+// entry. That keeps the determinism / codegen path under audit
+// without requiring libsqlite3 on every CI runner.
+
+// Stdlib-form import (no quotes) so the resolver consults
+// URUSCPATH / the platform stdlib directory (see preprocess.c
+// :: resolve_stdlib_path). The CI workflow copies
+// compiler/stdlib/*.urus into /usr/lib/urusc/ before running
+// ctest, so this matches the same path the other stdlib tests
+// (graph, math_ext, ...) use.
+import sqlite;
+
+fn main(): void {
+    let db: int = sqlite_open(":memory:");
+    sqlite_close(db);
+}

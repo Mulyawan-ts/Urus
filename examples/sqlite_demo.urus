@@ -1,0 +1,38 @@
+// Minimal SQLite demo.
+//
+// Requires libsqlite3 at link time. Compile with:
+//
+//     urusc examples/sqlite_demo.urus -o demo -l sqlite3
+//
+// Then run `./demo` — it creates `demo.db` in the working directory,
+// inserts two rows, queries them back, and closes the connection.
+
+import "sqlite";
+
+fn main(): void {
+    let db: int = sqlite_open("demo.db");
+    if db < 0 {
+        print("Failed to open database");
+        return;
+    }
+
+    let ok1: bool = sqlite_exec(db,
+        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)");
+    if !ok1 {
+        print(f"Schema error: {sqlite_last_error(db)}");
+        sqlite_close(db);
+        return;
+    }
+
+    sqlite_exec(db, "DELETE FROM users");
+    sqlite_exec(db, "INSERT INTO users(name) VALUES ('Alice')");
+    sqlite_exec(db, "INSERT INTO users(name) VALUES ('Bob')");
+
+    let rows: [[str]] = sqlite_query(db, "SELECT id, name FROM users ORDER BY id");
+    for row in rows {
+        print(f"{row[0]}: {row[1]}");
+    }
+
+    sqlite_close(db);
+    print("done");
+}

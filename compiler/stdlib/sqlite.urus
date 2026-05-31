@@ -1,0 +1,193 @@
+// SQLite bindings for URUS.
+//
+// This module is a thin wrapper over libsqlite3 (the system shared
+// library). Programs that import it must be linked with -lsqlite3 at
+// final compile time:
+//
+//     urusc app.urus -o app -l sqlite3
+//
+// Header / library prerequisites:
+//   * Linux/macOS  — `apt install libsqlite3-dev` / `brew install sqlite`
+//   * Windows      — install the SQLite amalgamation under MSYS2 or
+//                    point your compiler at sqlite3.h + sqlite3.lib.
+//
+// API surface (all method-call friendly via the underlying free fn):
+//
+//   sqlite_open(path)       -> int handle (>0 on success, -1 on error)
+//   sqlite_close(handle)    -> bool
+//   sqlite_exec(handle, sql) -> bool   (DDL / write statements)
+//   sqlite_query(handle, sql) -> [[str]]  (rows of stringified cells)
+//   sqlite_last_error(handle) -> str
+//
+// Design notes:
+//   * Connections live in a small static table indexed by handle so
+//     we never expose raw sqlite3* to URUS user code (URUS does not
+//     model opaque C pointers as first-class values yet).
+//   * Query results are returned as [[str]] — every cell is rendered
+//     via sqlite3_column_text, which works for INTEGER/REAL/TEXT/BLOB.
+//     Strict typed columns will land alongside the wider type-system
+//     work in 0.2.x.
+//   * Inputs are passed straight to sqlite3_exec / sqlite3_prepare_v2;
+//     **no SQL escaping is performed here**. Callers that interpolate
+//     untrusted data into SQL strings are responsible for their own
+//     parameterisation. A prepared-statement / bind() API is tracked
+//     as a follow-up.
+
+__emit__("""
+    #include <sqlite3.h>
+
+    /* Connection table. Handles are indices into this array + 1, so
+     * handle 0 is reserved for 'invalid' and a returned handle is
+     * always positive. URUS_SQLITE_MAX is intentionally small — the
+     * point of the wrapper is convenience scripts, not pooled
+     * production workloads. Outgrow this and you almost certainly
+     * want raw sqlite3 bindings via __emit__ in user code. */
+    #ifndef URUS_SQLITE_MAX
+    #define URUS_SQLITE_MAX 32
+    #endif
+
+    static sqlite3 *urus_sqlite_table[URUS_SQLITE_MAX] = {0};
+    static char    *urus_sqlite_last_err[URUS_SQLITE_MAX] = {0};
+
+    static int urus_sqlite_open(urus_str *path) {
+        for (int i = 0; i < URUS_SQLITE_MAX; i++) {
+            if (urus_sqlite_table[i] == NULL) {
+                sqlite3 *db = NULL;
+                int rc = sqlite3_open(path->data, &db);
+                if (rc != SQLITE_OK) {
+                    if (db) sqlite3_close(db);
+                    return -1;
+                }
+                urus_sqlite_table[i] = db;
+                if (urus_sqlite_last_err[i]) {
+                    free(urus_sqlite_last_err[i]);
+                    urus_sqlite_last_err[i] = NULL;
+                }
+                return i + 1;
+            }
+        }
+        return -1; /* table full */
+    }
+
+    static bool urus_sqlite_close(int64_t handle) {
+        int idx = (int)handle - 1;
+        if (idx < 0 || idx >= URUS_SQLITE_MAX) return false;
+        if (!urus_sqlite_table[idx]) return false;
+        int rc = sqlite3_close(urus_sqlite_table[idx]);
+        urus_sqlite_table[idx] = NULL;
+        if (urus_sqlite_last_err[idx]) {
+            free(urus_sqlite_last_err[idx]);
+            urus_sqlite_last_err[idx] = NULL;
+        }
+        return rc == SQLITE_OK;
+    }
+
+    static void urus_sqlite_set_err(int idx, const char *msg) {
+        if (urus_sqlite_last_err[idx]) {
+            free(urus_sqlite_last_err[idx]);
+        }
+        urus_sqlite_last_err[idx] = msg ? strdup(msg) : NULL;
+    }
+
+    static bool urus_sqlite_exec(int64_t handle, urus_str *sql) {
+        int idx = (int)handle - 1;
+        if (idx < 0 || idx >= URUS_SQLITE_MAX) return false;
+        sqlite3 *db = urus_sqlite_table[idx];
+        if (!db) return false;
+        char *errmsg = NULL;
+        int rc = sqlite3_exec(db, sql->data, NULL, NULL, &errmsg);
+        if (rc != SQLITE_OK) {
+            urus_sqlite_set_err(idx, errmsg ? errmsg : "sqlite_exec failed");
+            if (errmsg) sqlite3_free(errmsg);
+            return false;
+        }
+        urus_sqlite_set_err(idx, NULL);
+        return true;
+    }
+
+    /* Query returns rows as urus_array of urus_array of urus_str.
+     * Every cell is stringified via sqlite3_column_text which means
+     * NULL becomes an empty string. Strict typed columns are a
+     * follow-up. */
+    static urus_array *urus_sqlite_query(int64_t handle, urus_str *sql) {
+        urus_array *rows = urus_array_new();
+        int idx = (int)handle - 1;
+        if (idx < 0 || idx >= URUS_SQLITE_MAX) return rows;
+        sqlite3 *db = urus_sqlite_table[idx];
+        if (!db) return rows;
+
+        sqlite3_stmt *stmt = NULL;
+        int rc = sqlite3_prepare_v2(db, sql->data, -1, &stmt, NULL);
+        if (rc != SQLITE_OK) {
+            urus_sqlite_set_err(idx, sqlite3_errmsg(db));
+            if (stmt) sqlite3_finalize(stmt);
+            return rows;
+        }
+
+        int ncols = sqlite3_column_count(stmt);
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            urus_array *row = urus_array_new();
+            for (int c = 0; c < ncols; c++) {
+                const unsigned char *text = sqlite3_column_text(stmt, c);
+                urus_str *cell = urus_str_from(
+                    text ? (const char *)text : "");
+                urus_array_push(row, &cell);
+            }
+            urus_array_push(rows, &row);
+        }
+        if (rc != SQLITE_DONE) {
+            urus_sqlite_set_err(idx, sqlite3_errmsg(db));
+        } else {
+            urus_sqlite_set_err(idx, NULL);
+        }
+        sqlite3_finalize(stmt);
+        return rows;
+    }
+
+    static urus_str *urus_sqlite_last_error(int64_t handle) {
+        int idx = (int)handle - 1;
+        if (idx < 0 || idx >= URUS_SQLITE_MAX) return urus_str_from("");
+        const char *msg = urus_sqlite_last_err[idx];
+        return urus_str_from(msg ? msg : "");
+    }
+""");
+
+fn sqlite_open(path: str): int {
+    let result: int = -1;
+    __emit__("""
+        result = urus_sqlite_open(path);
+    """);
+    return result;
+}
+
+fn sqlite_close(handle: int): bool {
+    let result: bool = false;
+    __emit__("""
+        result = urus_sqlite_close(handle);
+    """);
+    return result;
+}
+
+fn sqlite_exec(handle: int, sql: str): bool {
+    let result: bool = false;
+    __emit__("""
+        result = urus_sqlite_exec(handle, sql);
+    """);
+    return result;
+}
+
+fn sqlite_query(handle: int, sql: str): [[str]] {
+    let result: [[str]] = [[""]];
+    __emit__("""
+        result = urus_sqlite_query(handle, sql);
+    """);
+    return result;
+}
+
+fn sqlite_last_error(handle: int): str {
+    let result: str = "";
+    __emit__("""
+        result = urus_sqlite_last_error(handle);
+    """);
+    return result;
+}

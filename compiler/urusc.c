@@ -188,10 +188,14 @@ static void show_help(char *progname)
         "  --target T  Set compilation target (wasm, wasi)\n"
         "  -o <file>   Specify output executable name (default: "
 #ifdef _WIN32
-        "a.exe)\n\n"
+        "a.exe)\n"
 #else
-        "a.out)\n\n"
+        "a.out)\n"
 #endif
+        "  -l <lib>    Link against <lib> (repeatable). Required by\n"
+        "              stdlib modules that bind C libraries — e.g.\n"
+        "              `urusc app.urus -o app -l sqlite3` for the\n"
+        "              sqlite module.\n\n"
         "Targets:\n"
         "  wasm        WebAssembly for browsers (emits .html + .js + .wasm)\n"
         "  wasi        Standalone WASM for runtimes like wasmtime/wasmer\n\n"
@@ -231,6 +235,17 @@ int main(int argc, char **argv)
     const char *output = NULL;
     const char *target = NULL; // "wasm" or "wasi"
 
+    /* Pass-through link libraries: `-l <name>` repeated. Used to
+     * tell the backend C compiler to link extra shared libraries
+     * required by stdlib modules — e.g. `urusc app.urus -o app -l
+     * sqlite3` for `compiler/stdlib/sqlite.urus`. Stored as a
+     * dynamic xrealloc-backed list because there is no sensible
+     * cap (a user importing sqlite + curl + ssl might pass three
+     * or more). */
+    char **extra_libs = NULL;
+    int   extra_libs_count = 0;
+    int   extra_libs_cap = 0;
+
     int arg_start = 1;
     // Check for subcommand
     if (argc >= 2 && strcmp(argv[1], "pkg") == 0) {
@@ -268,6 +283,14 @@ int main(int argc, char **argv)
             }
             else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc)
                 output = argv[++i];
+            else if (strcmp(argv[i], "-l") == 0 && i + 1 < argc) {
+                if (extra_libs_count >= extra_libs_cap) {
+                    extra_libs_cap = extra_libs_cap ? extra_libs_cap * 2 : 4;
+                    extra_libs = (char **)xrealloc(extra_libs,
+                        sizeof(char *) * (size_t)extra_libs_cap);
+                }
+                extra_libs[extra_libs_count++] = argv[++i];
+            }
             else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) {
                 target = argv[++i];
                 if (strcmp(target, "wasm") != 0 &&
@@ -476,25 +499,44 @@ int main(int argc, char **argv)
                 _putenv_s("PATH", new_path);
             }
         }
+#endif
 
-        // Runtime header is embedded in generated C, no -I needed
-        char cmd[8192];
-        snprintf(cmd, sizeof(cmd), "\"%s\" -std=c11 -O2 -o \"%s\" \"%s\" -lm",
-                 compiler_cmd, out_path, c_path);
-        fprintf(stderr, "Compiling: %s\n", cmd);
+        /* Build the argv array. Fixed prefix: gcc -std=c11 -O2 -o
+         * <out> <c> -lm. Trailing extra -l<name> entries come from
+         * the user's `-l` CLI flags; this is how stdlib modules
+         * that bind external libraries (sqlite, etc.) get linked.
+         * +2 is for the trailing "-lm" tail (added pair-wise) and
+         * the NULL terminator. */
+        int gcc_argc = 0;
+        int gcc_argv_cap = 16 + extra_libs_count * 2;
+        char **gcc_argv = (char **)xmalloc(
+            sizeof(char *) * (size_t)gcc_argv_cap);
+        gcc_argv[gcc_argc++] = (char *)"gcc";
+        gcc_argv[gcc_argc++] = (char *)"-std=c11";
+        gcc_argv[gcc_argc++] = (char *)"-O2";
+        gcc_argv[gcc_argc++] = (char *)"-o";
+        gcc_argv[gcc_argc++] = (char *)out_path;
+        gcc_argv[gcc_argc++] = (char *)c_path;
+        gcc_argv[gcc_argc++] = (char *)"-lm";
+        for (int li = 0; li < extra_libs_count; li++) {
+            gcc_argv[gcc_argc++] = (char *)"-l";
+            gcc_argv[gcc_argc++] = extra_libs[li];
+        }
+        gcc_argv[gcc_argc] = NULL;
 
-        // Use _spawnl for reliable execution on Windows
-        int ret = (int)_spawnl(_P_WAIT, compiler_cmd, "gcc", "-std=c11",
-                               "-O2", "-o", out_path, c_path, "-lm", NULL);
+        fprintf(stderr, "Compiling: %s", compiler_cmd);
+        for (int gi = 1; gi < gcc_argc; gi++) {
+            fprintf(stderr, " %s", gcc_argv[gi]);
+        }
+        fprintf(stderr, "\n");
+
+#ifdef _WIN32
+        int ret = (int)_spawnv(_P_WAIT, compiler_cmd, (char *const *)gcc_argv);
 #else
-        // Use fork/execvp to avoid shell injection via system()
-        fprintf(stderr, "Compiling: %s -std=c11 -O2 -o %s %s -lm\n",
-                compiler_cmd, out_path, c_path);
         int ret;
         pid_t pid = fork();
         if (pid == 0) {
-            execlp(compiler_cmd, "gcc", "-std=c11", "-O2", "-o", out_path,
-                   c_path, "-lm", (char *)NULL);
+            execvp(compiler_cmd, gcc_argv);
             _exit(127); // exec failed
         } else if (pid < 0) {
             ret = -1;
@@ -504,6 +546,7 @@ int main(int argc, char **argv)
             ret = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
         }
 #endif
+        xfree(gcc_argv);
 
         remove(c_path);
 
@@ -553,11 +596,13 @@ int main(int argc, char **argv)
     xfree(tokens);
     xfree(source);
 cleanup:
+    if (extra_libs) xfree(extra_libs);
     return 0;
 
 cleanup_err:
     ast_free(program);
     xfree(tokens);
     xfree(source);
+    if (extra_libs) xfree(extra_libs);
     return 1;
 }

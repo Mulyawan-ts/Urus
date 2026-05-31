@@ -87,6 +87,27 @@ hardened resilience, build portability, and the test loop.
 > Both were live in 0.3.x and would have been very hard to attribute to the
 > compiler from the symptom alone.
 
+### Post-foundation additions
+- **Stdlib: SQLite.** Added `compiler/stdlib/sqlite.urus` with thin
+  bindings over `libsqlite3`. Exposes `sqlite_open` / `sqlite_close`
+  / `sqlite_exec` / `sqlite_query` / `sqlite_last_error`. Connections
+  are handed back as small integer handles (indices into a static
+  table of `sqlite3*`) so URUS user code never sees a raw C pointer.
+  Query results come back as `[[str]]` — every cell rendered via
+  `sqlite3_column_text`, which works for `INTEGER`/`REAL`/`TEXT`/`BLOB`
+  but loses strict typing; tighter typed columns wait for the
+  0.2.x type-system work. A bind/parameterise API is also a
+  follow-up — today the wrapper passes SQL through to libsqlite3
+  unchanged, so callers must do their own escaping. Closes #182.
+- **CLI: `-l <lib>` passthrough.** `urusc` now accepts repeated
+  `-l <name>` flags and passes them to the backend C compiler as
+  link libraries. Required by the new SQLite module
+  (`urusc app.urus -o app -l sqlite3`), and the same mechanism
+  unlocks every future stdlib module that binds a system library.
+  The gcc invocation is now built as an `argv` array rather than
+  fixed `_spawnl`/`execlp`, matching the no-shell discipline from
+  PR #194.
+
 ### Foundation work (this release, in progress)
 - **CI repair (Stage 2 follow-up):** the project's GitHub Actions
   pipeline had been red since PR #192 — every Stage 2 PR landed via
