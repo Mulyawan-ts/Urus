@@ -1,15 +1,22 @@
 # Sponsorship channels for the URUS Foundation.
 #
-# The previous patreon entry (id "15684319") returned 404 — the
-# corresponding Patreon page does not exist. Issue #168 tracked the
-# broken link. We removed it and added GitHub Sponsors as the
-# primary channel (works out of the box for individual maintainer
-# accounts) and Ko-fi as a one-shot tip option.
+# Status note (per issue #168):
+#   The original patreon entry (id "15684319") returned 404 — the
+#   Patreon page never existed. Until the URUS Foundation has its
+#   own organization-level sponsor accounts set up, **all funding
+#   channels below temporarily point at the founder's personal
+#   accounts** (Rasya Andrean). Donations are still in service of
+#   the URUS project; we just don't have a separate foundation
+#   wallet yet.
 #
-# Indonesian-domiciled platforms (Saweria, Trakteer) require a real
-# account and verified bank details, so we leave them commented out
-# until a maintainer signs up. Uncomment + fill in when ready.
+# When the foundation registers its own accounts these entries will
+# move from personal to foundation handles. The URLs in the
+# `custom:` block are pinned to the founder's profile pages, so a
+# user visiting them today reaches an active sponsor page rather
+# than a 404.
 
 github: [RasyaAndrean]
 ko_fi: rasyaandrean
-# custom: ['https://saweria.co/<username>', 'https://trakteer.id/<username>']
+custom:
+  - 'https://saweria.co/rasyaandrean'
+  - 'https://trakteer.id/rasya_andrean'
