@@ -62,29 +62,25 @@ C11. The generated C is then handed to your system compiler (GCC, Clang, or
 
 ## 🚀 Quick Start
 
-### Pre-built installers
+### Pre-built installers (recommended for newcomers)
 
-> **Status:** the installer pipeline (`release-installers.yml`) landed in
-> [#208](https://github.com/Urus-Foundation/Urus/pull/208) but the
-> `v0.1.0` release was cut **before** it merged, so the current
-> [latest release](https://github.com/Urus-Foundation/Urus/releases/latest)
-> only has the source tarball attached. Pre-built bundles will appear
-> automatically on the next tag push (`v0.1.1` onwards). Until then, use
-> [Build from source](#build-from-source) below.
+Grab a pre-built bundle from the
+[latest release](https://github.com/Urus-Foundation/Urus/releases/latest):
 
-Once a tagged release with installers exists, the per-platform bundle
-will be:
-
-| Platform | File |
-|----------|------|
-| Windows | `Urus-*.exe` — graphical NSIS installer (opt-in PATH update) |
-| macOS | `Urus-*.pkg` — graphical Apple installer |
-| Debian / Ubuntu | `Urus-*.deb` — `sudo apt install ./Urus-*.deb` |
-| Fedora / RHEL | `Urus-*.rpm` — `sudo dnf install ./Urus-*.rpm` |
-| Any Linux | `Urus-*.tar.gz` — extract and add `bin/` to your `PATH` |
+| Platform | File | Install |
+|----------|------|---------|
+| Windows | `Urus-*-win64.exe` | Double-click — graphical NSIS installer with opt-in 'Add Urus to PATH' checkbox |
+| macOS | `Urus-*-Darwin.pkg` | Double-click — graphical Apple installer |
+| Debian / Ubuntu | `Urus-*-Linux.deb` | `sudo apt install ./Urus-*-Linux.deb` |
+| Fedora / RHEL | `Urus-*-Linux.rpm` | `sudo dnf install ./Urus-*-Linux.rpm` |
+| Any Linux | `Urus-*-Linux.tar.gz` | Extract and add `bin/` to your `PATH` |
 
 You'll still need a backend C compiler (GCC or Clang) installed
 separately to compile generated programs.
+
+> **First-run warnings:** binaries are **not code-signed yet** — Windows
+> SmartScreen and macOS Gatekeeper will show an 'unknown publisher'
+> dialog on first launch. Tracked as a separate project decision.
 
 ### Build from source
 

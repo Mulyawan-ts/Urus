@@ -15,6 +15,18 @@ on:
       - 'v*'
   workflow_dispatch: {}
 
+# The default GITHUB_TOKEN granted to workflow runs is read-only for
+# repository contents (this changed under newer repo defaults), so
+# softprops/action-gh-release fails with 'Resource not accessible by
+# integration' (HTTP 403) when it tries to attach files to the
+# matching GitHub Release. Explicitly request 'contents: write' for
+# the whole workflow — that's the minimum scope required for both
+# 'create-a-release' and 'upload-release-asset'. Artifacts uploaded
+# via actions/upload-artifact don't need this; only the
+# Attach-to-GitHub-Release step does.
+permissions:
+  contents: write
+
 jobs:
   windows:
     name: Windows installer (.exe)
