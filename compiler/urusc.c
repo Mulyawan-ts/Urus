@@ -196,26 +196,33 @@ static void show_help(char *progname)
         "  --ast       Display the Abstract Syntax Tree (AST)\n"
         "  --emit-c    Print generated C code to stdout\n"
         "  --target T  Set compilation target (wasm, wasi)\n"
-        "  -o <file>   Specify output executable name (default: "
+        "  -o <file>   Specify output executable name. Default is the\n"
+        "              input filename with `.urus` stripped (e.g.\n"
+        "              `urusc hello.urus` produces "
 #ifdef _WIN32
-        "a.exe)\n"
+        "`hello.exe`).\n"
 #else
-        "a.out)\n"
+        "`hello`).\n"
 #endif
         "  -l <lib>    Link against <lib> (repeatable). Required by\n"
         "              stdlib modules that bind C libraries — e.g.\n"
-        "              `urusc app.urus -o app -l sqlite3` for the\n"
-        "              sqlite module.\n\n"
+        "              `urusc app.urus -l sqlite3` for the sqlite\n"
+        "              module.\n\n"
         "Targets:\n"
         "  wasm        WebAssembly for browsers (emits .html + .js + .wasm)\n"
         "  wasi        Standalone WASM for runtimes like wasmtime/wasmer\n\n"
         "Examples:\n"
-        "  %s main.urus -o app\n"
-        "  %s build main.urus -o app\n"
-        "  %s run main.urus\n"
+        "  %s hello.urus               # produces hello"
+#ifdef _WIN32
+        ".exe\n"
+#else
+        "\n"
+#endif
+        "  %s build main.urus -o app   # explicit -o still works\n"
+        "  %s run main.urus            # compile and execute\n"
         "  %s main.urus --target wasm\n"
         "  %s main.urus --target wasi -o app.wasm\n",
-        progname, progname, progname, progname, progname, progname);
+        progname, progname, progname, progname, progname);
 }
 
 static void show_version(void)
@@ -223,10 +230,65 @@ static void show_version(void)
     printf(
         "URUS Compiler, version " URUS_COMPILER_VERSION "\n"
         "Copyright (C) 2026 Urus Foundation.\n"
-        "License: Apache License 2.0 <http://www.apache.org>\n"
-        "Homepage: https://github.com/Urus-Foundation/Urus\n\n"
-        "This is free software: you are free to change and redistribute it.\n"
-        "There is NO WARRANTY, to the extent permitted by law.\n");
+        "License: Apache License 2.0 <https://www.apache.org/licenses/LICENSE-2.0>\n"
+        "Homepage: https://github.com/Urus-Foundation/Urus\n");
+}
+
+// Derive a default output executable name from the input source path
+// when the user did NOT supply an explicit `-o <name>`. We take the
+// basename of the input (stripping any directory components) and trim
+// a trailing `.urus` if present, so that
+//
+//     urusc hello.urus
+//
+// produces `hello` (POSIX) / `hello.exe` (Windows) — the natural
+// behaviour requested in #212 instead of the historical `a.out` /
+// `a.exe`. The caller owns the returned heap buffer.
+static char *derive_default_output(const char *input_path)
+{
+    // Find the basename: last '/' or '\\', then everything after it.
+    const char *base = input_path;
+    for (const char *p = input_path; *p; p++) {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+
+    size_t len = strlen(base);
+
+    // Strip a trailing ".urus" (case-sensitive — the parser is too).
+    const char *ext = ".urus";
+    size_t ext_len = strlen(ext);
+    if (len > ext_len &&
+        strcmp(base + len - ext_len, ext) == 0) {
+        len -= ext_len;
+    }
+
+    // Fallback: if stripping leaves nothing (e.g. input was just
+    // ".urus"), keep the original basename verbatim.
+    if (len == 0) {
+        base = input_path;
+        for (const char *p = input_path; *p; p++) {
+            if (*p == '/' || *p == '\\')
+                base = p + 1;
+        }
+        len = strlen(base);
+    }
+
+#ifdef _WIN32
+    // Append ".exe" on Windows so cmd/PowerShell find the file
+    // without the user having to type the extension.
+    const char *suffix = ".exe";
+    size_t suffix_len = strlen(suffix);
+    char *out = xmalloc(len + suffix_len + 1);
+    memcpy(out, base, len);
+    memcpy(out + len, suffix, suffix_len);
+    out[len + suffix_len] = '\0';
+#else
+    char *out = xmalloc(len + 1);
+    memcpy(out, base, len);
+    out[len] = '\0';
+#endif
+    return out;
 }
 
 int main(int argc, char **argv)
@@ -399,19 +461,34 @@ int main(int argc, char **argv)
         }
         const char *c_path = c_path_buf;
 
+        // out_path lifetimes:
+        //   - if user supplied -o, we point at their argv buffer (no free).
+        //   - for WASM targets we point at a string literal (no free).
+        //   - for run-after we point at a small literal (no free).
+        //   - otherwise we derive from the input filename on the heap, and
+        //     `out_path_owned` keeps the pointer so we can free it at the
+        //     end of this block.
         const char *out_path;
+        char *out_path_owned = NULL;
         if (output) {
             out_path = output;
         } else if (target && strcmp(target, "wasm") == 0) {
             out_path = "a.html";
         } else if (target && strcmp(target, "wasi") == 0) {
             out_path = "a.wasm";
-        } else {
+        } else if (run_after) {
+            // `urusc run hello.urus` is allowed to leave a scratch
+            // binary behind; using a fixed name keeps the existing
+            // cleanup path (remove(out_path)) intact.
 #ifdef _WIN32
-            out_path = run_after ? "_urus_run.exe" : "a.exe";
+            out_path = "_urus_run.exe";
 #else
-            out_path = run_after ? "_urus_run" : "a.out";
+            out_path = "_urus_run";
 #endif
+        } else {
+            // `urusc hello.urus` → `hello` / `hello.exe`. See #212.
+            out_path_owned = derive_default_output(path);
+            out_path = out_path_owned;
         }
 
         fwrite(cbuf.data, 1, cbuf.len, f);
@@ -563,6 +640,7 @@ int main(int argc, char **argv)
         if (ret != 0) {
             fprintf(stderr, "Compilation failed.\n");
             codegen_free(&cbuf);
+            if (out_path_owned) xfree(out_path_owned);
             goto cleanup_err;
         }
 
@@ -599,6 +677,7 @@ int main(int argc, char **argv)
         }
 
         printf("Output: %s\n", out_path);
+        if (out_path_owned) xfree(out_path_owned);
     }
 
     codegen_free(&cbuf);
