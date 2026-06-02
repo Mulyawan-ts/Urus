@@ -276,6 +276,36 @@ if(WIN32)
     set(CPACK_NSIS_MODIFY_PATH ON)   # offers an 'Add Urus to PATH' checkbox
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "Urus")
+
+    # Start Menu shortcut.
+    #
+    # urusc itself is a CLI tool — clicking a shortcut to urusc.exe would
+    # flash a console window and close immediately, which is worse than
+    # no shortcut. Instead we install a small launcher script that opens
+    # an interactive cmd.exe with PATH and URUSCPATH already pointing at
+    # the install prefix. The shortcut targets that script.
+    #
+    # CPACK_PACKAGE_EXECUTABLES is a flat list of (target_name, label)
+    # pairs. NSIS looks for `bin/<target_name>.exe`; we ship our
+    # launcher with a .cmd extension, so we register an extra
+    # CPACK_NSIS_CREATE_ICONS_EXTRA section that creates the shortcut
+    # by hand and CPACK_NSIS_DELETE_ICONS_EXTRA that removes it on
+    # uninstall. Same pattern Chocolatey and a few others use.
+    install(PROGRAMS
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/urus-prompt.cmd"
+            DESTINATION bin)
+
+    set(CPACK_NSIS_MENU_LINKS
+        "bin\\\\urus-prompt.cmd" "Urus Compiler Prompt"
+        "${CPACK_PACKAGE_HOMEPAGE_URL}" "Urus on GitHub")
+
+    # Optional desktop shortcut. The NSIS generator can offer this as a
+    # tick-box at install time when CPACK_NSIS_CREATE_ICONS_EXTRA writes
+    # the shortcut and CPACK_NSIS_DELETE_ICONS_EXTRA removes it.
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA
+        "CreateShortCut '$DESKTOP\\\\Urus Compiler Prompt.lnk' '$INSTDIR\\\\bin\\\\urus-prompt.cmd'")
+    set(CPACK_NSIS_DELETE_ICONS_EXTRA
+        "Delete '$DESKTOP\\\\Urus Compiler Prompt.lnk'")
 elseif(APPLE)
     set(CPACK_GENERATOR "productbuild;TGZ")
 elseif(UNIX)

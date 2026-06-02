@@ -88,11 +88,23 @@ hardened resilience, build portability, and the test loop.
 > compiler from the symptom alone.
 
 ### Post-foundation additions
+- **Windows installer: shortcuts + interactive prompt.** The NSIS
+  bundle now ships a small `bin/urus-prompt.cmd` launcher and
+  registers it under the Start Menu (`Urus Compiler Prompt`) plus
+  an opt-in desktop shortcut. The launcher opens an interactive
+  `cmd.exe` with `PATH` and `URUSCPATH` already pointing at the
+  install prefix, so a user who just installed Urus can click the
+  Start-Menu tile and immediately run `urusc --version` — no
+  `setx PATH ...` step, no rebooting the shell. The install root
+  is resolved from the script's own directory (`%~dp0`), so custom
+  install locations keep working. A second Start-Menu entry links
+  to the project's GitHub homepage.
 - **Installers (Windows / macOS / Linux).** Added CPack
   configuration plus a `release-installers.yml` workflow that
   builds platform-native bundles on every `v*` tag push and
   attaches them to the matching GitHub Release:
-    * Windows — NSIS `.exe` (Start-Menu shortcut, opt-in PATH update)
+    * Windows — NSIS `.exe` (Start-Menu shortcut + opt-in desktop
+      shortcut, opt-in PATH update)
     * macOS — productbuild `.pkg`
     * Linux — `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), `.tar.gz`
     * Source — `.tar.gz` + `.zip`

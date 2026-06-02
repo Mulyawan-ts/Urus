@@ -78,6 +78,12 @@ Grab a pre-built bundle from the
 You'll still need a backend C compiler (GCC or Clang) installed
 separately to compile generated programs.
 
+**Windows users:** after install, look in the Start Menu for
+**Urus Compiler Prompt** — it opens an interactive console with `urusc`
+already on `PATH`, so you can run `urusc --version` / `urusc hello.urus`
+without touching your system PATH. The installer also offers an opt-in
+desktop shortcut to the same prompt.
+
 > **First-run warnings:** binaries are **not code-signed yet** — Windows
 > SmartScreen and macOS Gatekeeper will show an 'unknown publisher'
 > dialog on first launch. Tracked as a separate project decision.
